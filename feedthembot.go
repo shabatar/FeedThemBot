@@ -9,23 +9,8 @@ import (
 	"golang.org/x/net/proxy"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"encoding/json"
-)
-
-var startReplies = tgbotapi.NewInlineKeyboardMarkup(
-	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("Feed Me!","Feed Me!"),
-	),
-	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("Feed Someone Else!","Feed Someone Else!"),
-	),
-)
-
-const (
-	EmojiCat = "\xF0\x9F\x90\x88"
-	EmojiHard = "\xF0\x9F\x98\xAB"
-	EmojiPity = "\xF0\x9F\x98\x96"
-	EmojiYumm = "\xF0\x9F\x98\x8B"
-	EmojiWave = "\xF0\x9F\x91\x8B"
+	"strconv"
+	"regexp"
 )
 
 type Proxy struct {
@@ -39,9 +24,23 @@ type Settings struct {
 	Proxy Proxy `json:"proxy"` 
 }
 
-
 func isText(update tgbotapi.Update) bool {
 	return reflect.TypeOf(update.Message.Text).Kind() == reflect.String && update.Message.Text != ""
+}
+
+func isInt(s string) bool {
+	_, err := strconv.Atoi(s);
+	return err == nil
+}
+
+func isDayFrequency(s string) bool {
+	value, _ := regexp.MatchString(`\dt`, s)
+	return value;
+}
+
+func isDayTime(s string) bool {
+	value, _ := regexp.MatchString(`\d\d:\d\d`, s)
+	return value;
 }
 
 func main() {
@@ -93,20 +92,31 @@ func main() {
 
 	patience := 2;
 
+	dayFrequency := 0;
+
 	for update := range updates {
 		if update.CallbackQuery != nil {
-			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
-			switch update.CallbackQuery.Data {
+			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, dunnoMessage)
+			callbackData := update.CallbackQuery.Data
+			switch callbackData {
 				case "Feed Me!":
-					bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, 
-						"I cannot feed you right now. Sorry" + EmojiPity))
+					msg = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, feedMeWelcomeMessage)
+					msg.ReplyMarkup = dayFreqReplies
 				case "Feed Someone Else!":
-					bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, 
-						"I cannot feed them right now. Sorry" + EmojiPity))
-				default:
-					bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, 
-						"I don't know what to do. Sorry" + EmojiPity))
+					msg = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, feedPetWelcomeMessage)
 			}
+			if isDayFrequency(callbackData) {
+				dayFrequency, _ = strconv.Atoi(callbackData[:1]);
+				msg = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Shall you eat " + 
+					callbackData[:1] + " times per day!\n" + myFirstMealMessage)
+				msg.ReplyMarkup = firstMealReplies
+			}
+			if isDayTime(callbackData) {
+				msg = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, strconv.Itoa(dayFrequency) + " meals\n" + 
+				mySetOtherMealsMessage)
+			}
+			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
+			bot.Send(msg)
 		}
 		if update.Message == nil {
 			continue
@@ -117,25 +127,21 @@ func main() {
 			patience = 2
 			switch update.Message.Text {
 				case "/start", "/restart":
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, 
-						"Hi there!" + EmojiWave + " My name is FeedThemBot and I am here to help you eat regularly.\nI know, it's difficult! " + EmojiHard + 
-						" \nI could remind you when you should probably grab a bite. " + EmojiYumm + 
-						" \nJust press a button and set up a meal notification. You can also use me to remind you about feeding your pets " + EmojiCat)
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMessage)
 					msg.ReplyMarkup = startReplies
 					bot.Send(msg)
 				default: 
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "You " + update.Message.Text + ", " + update.Message.From.FirstName + "!")
-					bot.Send(msg) 
+					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, dunnoMessage))
 			}
 		} else {
 			patience -= 1
 		}
 		if patience == 0 {
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Hmmm... I'm not sure if you're using me the right way")
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, patienceMessage1)
 			bot.Send(msg)
 		}
 		if patience < 0 {
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Could you please stop it?")
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, patienceMessage2)
 			bot.Send(msg)
 			patience = 1
 		}
