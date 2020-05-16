@@ -43,6 +43,11 @@ func isDayTime(s string) bool {
 	return value;
 }
 
+func isSetMeal(s string) bool {
+	value, _ := regexp.MatchString(`\d[nrt][dh] meal`, s)
+	return value;
+}
+
 func main() {
 	configFile, err := os.Open("botsettings.json")
 	var settings Settings
@@ -112,8 +117,16 @@ func main() {
 				msg.ReplyMarkup = firstMealReplies
 			}
 			if isDayTime(callbackData) {
-				msg = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, strconv.Itoa(dayFrequency) + " meals\n" + 
-				mySetOtherMealsMessage)
+				if (dayFrequency > 1) { 
+					msg = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n" + 
+					mySetOtherMealsMessage)
+					msg.ReplyMarkup = printEditMealsReplies(dayFrequency)
+				} else {
+					msg = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n") 
+				}
+			}
+			if isSetMeal(callbackData) {
+			    msg = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "When you’d like to have " + callbackData + "?")
 			}
 			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
 			bot.Send(msg)

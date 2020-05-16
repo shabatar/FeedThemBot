@@ -67,3 +67,37 @@ var firstMealReplies = tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardButtonData("12:00","12:00"),
 	),
 )
+
+func printEditMealsReplies(mealsNumber int) tgbotapi.InlineKeyboardMarkup {
+	replies := [8]tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("2nd meal", "2nd meal"),
+		tgbotapi.NewInlineKeyboardButtonData("3rd meal", "3rd meal"),
+		tgbotapi.NewInlineKeyboardButtonData("4th meal", "4th meal"),
+		tgbotapi.NewInlineKeyboardButtonData("5th meal", "5th meal"),
+		tgbotapi.NewInlineKeyboardButtonData("6th meal", "6th meal"),
+		tgbotapi.NewInlineKeyboardButtonData("7th meal", "7th meal"),
+		tgbotapi.NewInlineKeyboardButtonData("8th meal", "8th meal"),
+		tgbotapi.NewInlineKeyboardButtonData("periodically", "periodically")}
+	var row1 []tgbotapi.InlineKeyboardButton
+	var row2 []tgbotapi.InlineKeyboardButton
+	var row3 []tgbotapi.InlineKeyboardButton
+	var firstMealReplies tgbotapi.InlineKeyboardMarkup
+
+	half := mealsNumber / 2
+	row1 = append(row1, replies[:half]...)
+	row2 = append(row2, replies[half:mealsNumber-1]...)
+	row3 = append(row3, replies[len(replies)-1])
+	if mealsNumber == 2 {
+		firstMealReplies = tgbotapi.NewInlineKeyboardMarkup(
+			row1,
+			row3,
+		)
+		return firstMealReplies
+	}
+	firstMealReplies = tgbotapi.NewInlineKeyboardMarkup(
+		row1,
+		row2,
+		row3,
+	)
+	return firstMealReplies
+}
