@@ -5,25 +5,18 @@ import (
 )
 
 const (
-	EmojiCat = "\xF0\x9F\x90\x88"
-	EmojiHard = "\xF0\x9F\x98\xAB"
-	EmojiPity = "\xF0\x9F\x98\x96"
-	EmojiYumm = "\xF0\x9F\x98\x8B"
-	EmojiWave = "\xF0\x9F\x91\x8B"
-)
-
-const (
-	welcomeMessage = 	"Hi there!" + EmojiWave + " My name is FeedThemBot and I am here to help you eat regularly.\nI know, it's difficult! " + EmojiHard + 
-					" \nI could remind you when you should probably grab a bite. " + EmojiYumm + 
-					" \nJust press a button and set up a meal notification. You can also use me to remind you about feeding your pets " + EmojiCat
+	welcomeMessage = "Hi there!👋 My name is FeedThemBot and I am here to help you eat regularly.\nI know, it's difficult! 😫" + 
+					" \nI could remind you when you should probably grab a bite. 😋" + 
+					" \nJust press a button and set up a meal notification. You can also use me to remind you about feeding your pets 🐈"
+	timezoneMessage = "First, I need you to select your timezone in order to deliver messages at right time ⏳"
 	patienceMessage1 = "Hmmm... I'm not sure if you're using me the right way"
 	patienceMessage2 = "Could you please stop it?"
-	dunnoMessage = "I don't know what to do. Sorry" + EmojiPity
+	dunnoMessage = "I don't know what to do. Sorry 😢"
 )
 
 const (
 	feedMeWelcomeMessage = "OK, I shall remind you whenever you ought to eat. How often you’d like to eat per day?"
-	feedPetWelcomeMessage = "I don't know how to feed someone else. Sorry" + EmojiPity
+	feedPetWelcomeMessage = "I don't know how to feed someone else. Sorry 😢"
 )
 
 const (
@@ -31,7 +24,37 @@ const (
 	mySetOtherMealsMessage = "When you’d like to have (set up time manually or set period):"
 )
 
-var startReplies = tgbotapi.NewInlineKeyboardMarkup(
+var timezoneReplies = tgbotapi.NewInlineKeyboardMarkup(
+	tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("GMT-12","GMT-12"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT-10","GMT-10"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT-8","GMT-08"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT-7","GMT-07"),
+	),
+	tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("GMT-1","GMT-01"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT-3","GMT-03"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT-4","GMT-04"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT-5","GMT-05"),
+	),
+	tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("GMT","GMT+00"),
+	),
+	tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("GMT+4","GMT+04"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT+3","GMT+03"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT+2","GMT+02"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT+1","GMT+01"),
+	),
+	tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("GMT+5","GMT+05"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT+7","GMT+07"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT+9","GMT+09"),
+		tgbotapi.NewInlineKeyboardButtonData("GMT+10","GMT+10"),
+	),
+)
+
+var setupReplies = tgbotapi.NewInlineKeyboardMarkup(
 	tgbotapi.NewInlineKeyboardRow(
 		tgbotapi.NewInlineKeyboardButtonData("Feed Me!","Feed Me!"),
 	),
@@ -65,6 +88,15 @@ var firstMealReplies = tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardButtonData("10:00","10:00"),
 		tgbotapi.NewInlineKeyboardButtonData("11:00","11:00"),
 		tgbotapi.NewInlineKeyboardButtonData("12:00","12:00"),
+	),
+)
+
+var agreeDisagreeReplies = tgbotapi.NewInlineKeyboardMarkup(
+	tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("Submit","Submit"),
+	),
+	tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("Cancel","Cancel"),
 	),
 )
 
