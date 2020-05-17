@@ -48,18 +48,7 @@ func isSetMeal(s string) bool {
 	return value;
 }
 
-func main() {
-	configFile, err := os.Open("botsettings.json")
-	var settings Settings
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "an error occured while opening config file: ", err)
-	}
-	defer configFile.Close()
-	jsonParser := json.NewDecoder(configFile)
-	if err = jsonParser.Decode(&settings); err != nil {
-		fmt.Fprintln(os.Stderr, "an error occured while parsing config file: ", err)
-	}
-
+func feedThemBot(settings Settings) {
 	var Proxy Proxy = settings.Proxy
 	proxyAuth := proxy.Auth{
 		User:     Proxy.ProxyUser,
@@ -160,4 +149,29 @@ func main() {
 		}
 
 	}
+}
+
+func initDB() {
+	if err := createUsageTable(); err != nil {
+		panic(err)
+	}
+	if err := createDailyUsersTable(); err != nil {
+		panic(err)
+	}
+}
+
+func main() {
+	configFile, err := os.Open("botsettings.json")
+	var settings Settings
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "an error occured while opening config file: ", err)
+	}
+	defer configFile.Close()
+	jsonParser := json.NewDecoder(configFile)
+	if err = jsonParser.Decode(&settings); err != nil {
+		fmt.Fprintln(os.Stderr, "an error occured while parsing config file: ", err)
+	}
+
+	initDB()
+	feedThemBot(settings)
 }

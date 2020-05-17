@@ -1,6 +1,22 @@
-version: '3'
+version: '3.5'
 services:
+  db:
+    image: postgres:latest
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: postgres
+
   feedthembot:
     build: .
     ports:
-     - "8080:8080"
+     - 8080:8080
+    links:
+      - db
+    environment:
+      PGHOST: db
+      PGDATABASE: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGPORT: 5432
+      SSLMODE: disable
