@@ -8,21 +8,14 @@ import (
 	"reflect"
 	"golang.org/x/net/proxy"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
-	"encoding/json"
 	"strconv"
 	"regexp"
 )
 
-type Proxy struct {
-	ProxyURL  string `json:"URL"`
-	ProxyUser string `json:"user"`
-	ProxyPass string `json:"pass"`
-} 
-
-type Settings struct {
-	BotToken string `json:"token"`
-	Proxy Proxy `json:"proxy"` 
-}
+var BotToken = os.Getenv("TOKEN")
+var URL = os.Getenv("URL")
+var USER = os.Getenv("USER")
+var PASS = os.Getenv("PASS")
 
 func isText(update tgbotapi.Update) bool {
 	return reflect.TypeOf(update.Message.Text).Kind() == reflect.String && update.Message.Text != ""
@@ -48,31 +41,41 @@ func isSetMeal(s string) bool {
 	return value;
 }
 
-func feedThemBot(settings Settings) {
-	var Proxy Proxy = settings.Proxy
-	proxyAuth := proxy.Auth{
-		User:     Proxy.ProxyUser,
-		Password: Proxy.ProxyPass,
+func feedThemBot() {
+	if len(BotToken) == 0 {
+		log.Printf("TOKEN environment variable is missing: you can request one by creating a bot in BotFather")
+    	return
 	}
-	dialer, err := proxy.SOCKS5(
-				"tcp", 
-				Proxy.ProxyURL,
-				&proxyAuth, 
-				proxy.Direct)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "an error occured while connecting to proxy", err)
-	}
+	var bot *tgbotapi.BotAPI
+	if len(URL) != 0 {
+		dialer, err := proxy.SOCKS5(
+					"tcp", 
+					URL,
+					&proxy.Auth{
+						User:     USER,
+						Password: PASS,
+					}, 
+					proxy.Direct)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "an error occured while connecting to server", err)
+		}
 
-	tr := &http.Transport{Dial: dialer.Dial}
+		tr := &http.Transport{Dial: dialer.Dial}
 
-	myClient := &http.Client{
-		Transport: tr,
-	}
-	
-	bot, err := tgbotapi.NewBotAPIWithClient(settings.BotToken, "https://api.telegram.org/bot%s/%s", myClient)
-	
-	if err != nil {
-		log.Panic(err)
+		myClient := &http.Client{
+			Transport: tr,
+		}
+		
+		bot, err = tgbotapi.NewBotAPIWithClient(BotToken, "https://api.telegram.org/bot%s/%s", myClient)
+		if err != nil {
+			log.Panic(err)
+		}
+	} else {
+		var err error
+		bot, err = tgbotapi.NewBotAPI(BotToken)
+		if err != nil {
+			log.Panic(err)
+		}
 	}
 	
 	bot.Debug = true
@@ -82,7 +85,7 @@ func feedThemBot(settings Settings) {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-	updates, err := bot.GetUpdatesChan(u)
+	updates, _ := bot.GetUpdatesChan(u)
 
 	patience := 2;
 
@@ -161,17 +164,6 @@ func initDB() {
 }
 
 func main() {
-	configFile, err := os.Open("botsettings.json")
-	var settings Settings
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "an error occured while opening config file: ", err)
-	}
-	defer configFile.Close()
-	jsonParser := json.NewDecoder(configFile)
-	if err = jsonParser.Decode(&settings); err != nil {
-		fmt.Fprintln(os.Stderr, "an error occured while parsing config file: ", err)
-	}
-
 	initDB()
-	feedThemBot(settings)
+	feedThemBot()
 }

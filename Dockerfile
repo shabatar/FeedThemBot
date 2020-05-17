@@ -7,7 +7,6 @@ ENV GOPATH /go
 ENV PATH /go/bin:$PATH
 
 COPY ./src ${GOPATH}/src/${APP_NAME}
-ADD botsettings.json ${GOPATH}/src/${APP_NAME}
 WORKDIR ${GOPATH}/src/${APP_NAME}
 
 RUN apk add --no-cache ca-certificates &&\
