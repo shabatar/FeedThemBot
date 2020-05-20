@@ -80,6 +80,10 @@ func insertUser(username string) error {
     return execQuery("INSERT INTO users(username) VALUES ('" + username + "') ON CONFLICT (username) DO NOTHING;")
 }
 
+func clearInsertUser(username string) error {
+    return execQuery("INSERT INTO users(username) VALUES ('" + username + "') ON CONFLICT (username) DO UPDATE SET patience = DEFAULT, selectedFrequency = DEFAULT, userTimezone = DEFAULT, userMealEditIndex = DEFAULT, userMealsUTC = DEFAULT;")
+}
+
 func addUserPatience(username string, patience int) error {
     return execQuery("INSERT INTO users(username, patience) VALUES ('" + username + "', " + strconv.Itoa(patience) + ") ON CONFLICT (username) DO UPDATE SET patience = users.patience + (" + strconv.Itoa(patience) + ");")
 }

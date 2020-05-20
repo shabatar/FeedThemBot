@@ -101,12 +101,6 @@ func feedThemBot() {
 			log.Printf("[%s] %s", userName, update.CallbackQuery.Data)
 			mealsSet, _ := userMealsUTCSet(userName)
 			dayFrequency, _ := getUserSelectedFrequency(userName)
-			if mealsSet {
-				msg = tgbotapi.NewMessage(chatID, "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?")
-				msg.ReplyMarkup = agreeDisagreeReplies
-				bot.Send(msg)
-				continue
-			}
 			switch callbackData {
 				case "Feed Me!":
 					userTimezone, _ := getUserTimezone(userName)
@@ -122,9 +116,13 @@ func feedThemBot() {
 					msg = tgbotapi.NewMessage(chatID, feedPetWelcomeMessage)
 				case "Submit":
 					msg = tgbotapi.NewMessage(chatID, "You are all set! Wait for the notifications")
+					bot.Send(msg)
+					continue
 				case "Cancel":
 					msg = tgbotapi.NewMessage(chatID, "Okay...😢")
 					createUserDailyMeals(userName)
+					bot.Send(msg)
+					continue
 			}
 			if isDayFrequency(callbackData) {
 				msg = tgbotapi.NewMessage(chatID, "Shall you eat " + 
@@ -132,9 +130,10 @@ func feedThemBot() {
 				setUserSelectedFrequency(userName, callbackData[:1])
 				createUserDailyMeals(userName)
 				msg.ReplyMarkup = firstMealReplies
-			}
-			if isDayTime(callbackData) {
-				// userName := update.CallbackQuery.From.UserName
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
+				bot.Send(msg)
+				continue
+			} else if isDayTime(callbackData) {
 				dayFrequency, _ := getUserSelectedFrequency(userName)
 				// Update first meal
 				setUserMealEditIndex(userName, "1")
@@ -146,25 +145,39 @@ func feedThemBot() {
 				} else {
 					msg = tgbotapi.NewMessage(chatID, "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n") 
 					mealsSet, _ := userMealsUTCSet(userName)
-					if mealsSet {
+					if dayFrequency > 0 && mealsSet {
 						msg = tgbotapi.NewMessage(chatID, "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?")
 						msg.ReplyMarkup = agreeDisagreeReplies
 					}
 				}
-			}
-			if isSetMeal(callbackData) {
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
+				bot.Send(msg)
+				continue
+			} else if isSetMeal(callbackData) {
 				userName := update.CallbackQuery.From.UserName
 			    msg = tgbotapi.NewMessage(chatID, "When you’d like to have " + callbackData + "? \n(enter HH:MM:SS or HH:MM)")
 			    setUserMealEditIndex(userName, callbackData[:1])
-			}
-			if isTimezone(callbackData) {
+			    bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
+				bot.Send(msg)
+				continue
+			} else if isTimezone(callbackData) {
 			    setUserTimezone(userName, callbackData[len(callbackData)-3:])
 			    msg = tgbotapi.NewMessage(chatID, "Timezone has been set")
 		    	msg = tgbotapi.NewMessage(chatID, feedMeWelcomeMessage)
 				msg.ReplyMarkup = dayFreqReplies
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
+				bot.Send(msg)
+				continue
+			} else if dayFrequency > 0 && mealsSet {
+				msg = tgbotapi.NewMessage(chatID, "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?")
+				msg.ReplyMarkup = agreeDisagreeReplies
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
+				bot.Send(msg)
+				continue
 			}
 			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
 			bot.Send(msg)
+			continue
 		}
 		if update.Message == nil {
 			continue
@@ -178,35 +191,47 @@ func feedThemBot() {
 			msg := tgbotapi.NewMessage(chatID, dunnoMessage)
 			msgText := update.Message.Text
 			mealsSet, _ := userMealsUTCSet(userName)
-			log.Printf("boooooolean %t", mealsSet)
 			dayFrequency, _ := getUserSelectedFrequency(userName)
-			if mealsSet {
-				msg = tgbotapi.NewMessage(chatID, "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?")
-				msg.ReplyMarkup = agreeDisagreeReplies
-				bot.Send(msg)
-				continue
+			switch msgText {
+				case "/start":
+					msg = tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMessage)
+					msg.ReplyMarkup = setupReplies
+					bot.Send(msg)
+					continue
+				case "/restart":
+					clearInsertUser(userName)
+					msg = tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMessage)
+					msg.ReplyMarkup = setupReplies
+					bot.Send(msg)
+					continue
 			}
 			if isDayTime(msgText) {
 				// Update meal #K
-			    log.Printf("setting userMeal to =  : " + msgText)
 				updateUserDailyMeal(userName, msgText)
+				mealsSet, _ = userMealsUTCSet(userName)
+				if dayFrequency > 0 && mealsSet {
+					msg = tgbotapi.NewMessage(chatID, "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?")
+					msg.ReplyMarkup = agreeDisagreeReplies
+					bot.Send(msg)
+					continue
+				}
 				if (dayFrequency > 1) { 
 					msg = tgbotapi.NewMessage(chatID, "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n" + 
 					mySetOtherMealsMessage)
 					msg.ReplyMarkup = printEditMealsReplies(dayFrequency)
 					bot.Send(msg)
+					continue
 				} else {
 					msg = tgbotapi.NewMessage(chatID, "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n") 
 				}
+				bot.Send(msg)
 				continue
-			} else {
-				switch msgText {
-					case "/start", "/restart":
-						msg = tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMessage)
-						msg.ReplyMarkup = setupReplies
-				}
+			} else if dayFrequency > 0 && mealsSet {
+				msg = tgbotapi.NewMessage(chatID, "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?")
+				msg.ReplyMarkup = agreeDisagreeReplies
+				bot.Send(msg)
+				continue
 			}
-			bot.Send(msg)
 		} else {
 			insertUser(userName)
 			addUserPatience(userName, -1)
