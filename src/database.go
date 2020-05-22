@@ -3,11 +3,11 @@ package main
 import (
     "database/sql"
     "fmt"
-    _ "github.com/lib/pq"
     "log"
     "os"
     "strconv"
     "strings"
+    "github.com/lib/pq"
 )
 
 var host = os.Getenv("PGHOST")
@@ -24,23 +24,51 @@ const (
                                 ID SERIAL PRIMARY KEY,
                                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                 username TEXT,
-                                chatID INT,
+                                chatID BIGINT,
                                 message TEXT,
                                 answer TEXT);`
     createDailySubscribersTableQuery = `CREATE TABLE IF NOT EXISTS usersDaily(
-                                UserID SERIAL PRIMARY KEY,
-                                ChatID INT,
-                                userTimezone TEXT,
-                                userMealsUTC TIME[]);`
+                                userID SERIAL PRIMARY KEY,
+                                chatID BIGINT,
+                                username TEXT UNIQUE,
+                                userMealsUTC TEXT[]);`
     createUsersTableQuery = `CREATE TABLE IF NOT EXISTS users(userID SERIAL PRIMARY KEY,
-                                 chatID NUMERIC,
+                                 chatID BIGINT,
                                  username TEXT UNIQUE,
                                  patience INT DEFAULT 2,
                                  selectedFrequency INT DEFAULT 0,
                                  userTimezone INT DEFAULT -100,
                                  userMealEditIndex INT DEFAULT 0,
-                                 userMealsUTC TIME[]);`
+                                 userMealsUTC TEXT[]);`
 )
+
+type User struct {
+    patience int
+    selectedFrequency int
+    userTimezone int
+    userMealEditIndex int
+    userMealsUTC []string
+}
+
+func getUserState(username string) (string, error) {
+    db, err := sql.Open("postgres", dbInfo)
+    if err != nil {
+        return "", err
+    }
+    defer db.Close()
+    user := new(User)
+    
+    row := db.QueryRow("SELECT (patience, selectedFrequency, userTimezone, userMealEditIndex) FROM users WHERE username = '" + username + "';")
+    err = row.Scan(&user.patience, &user.selectedFrequency, &user.userTimezone, &user.userMealEditIndex)
+    
+    row = db.QueryRow("SELECT userMealsUTC FROM users WHERE username = '" + username + "';")
+    err = row.Scan(pq.Array(&user.userMealsUTC))
+
+    if err != nil {
+        log.Printf("an error occured")
+    }
+    return "", nil
+}
 
 func selectIntValueFromUsers(valueType string, username string) (int, error) {
     db, err := sql.Open("postgres", dbInfo)
@@ -76,8 +104,12 @@ func execQuery(query string) error {
     return nil
 }
 
-func insertUser(username string) error {
-    return execQuery("INSERT INTO users(username) VALUES ('" + username + "') ON CONFLICT (username) DO NOTHING;")
+func insertUser(username string, chatID int64) error {
+    return execQuery("INSERT INTO users(username, chatID) VALUES ('" + username + "', " + strconv.FormatInt(chatID, 10) + "::BIGINT) ON CONFLICT (username) DO UPDATE SET chatID = " + strconv.FormatInt(chatID, 10) + "::BIGINT;")
+}
+
+func migrateDailyUser(username string) error {
+    return execQuery("INSERT INTO usersDaily(userid, chatid, username, usermealsutc) SELECT userid, chatid, username, usermealsutc FROM users WHERE username = '" + username + "';")
 }
 
 func clearInsertUser(username string) error {
@@ -99,7 +131,7 @@ func createUserDailyMeals(username string) error {
         emptyMeals[i-1] = "null"
     }
     meals := "[" + strings.Join(emptyMeals, ",") + "]"
-    return execQuery("INSERT INTO users(username, userMealsUTC) VALUES ('" + username + "', ARRAY" + meals + "::TIME[]) ON CONFLICT (username) DO UPDATE SET userMealsUTC = ARRAY" + meals + "::TIME[];")
+    return execQuery("INSERT INTO users(username, userMealsUTC) VALUES ('" + username + "', ARRAY" + meals + "::TEXT[]) ON CONFLICT (username) DO UPDATE SET userMealsUTC = ARRAY" + meals + "::TEXT[];")
 }
 
 func updateUserDailyMeal(username string, mealTime string) error {

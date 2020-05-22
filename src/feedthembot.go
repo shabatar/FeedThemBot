@@ -10,12 +10,14 @@ import (
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"strconv"
 	"regexp"
+	"time"
 )
 
 var BotToken = os.Getenv("TOKEN")
 var URL = os.Getenv("URL")
 var USER = os.Getenv("USER")
 var PASS = os.Getenv("PASS")
+var SEND = os.Getenv("SEND")
 
 func isText(update tgbotapi.Update) bool {
 	return reflect.TypeOf(update.Message.Text).Kind() == reflect.String && update.Message.Text != ""
@@ -49,7 +51,7 @@ func isTimezone(s string) bool {
 func feedThemBot() {
 	if len(BotToken) == 0 {
 		log.Printf("TOKEN environment variable is missing: you can request one by creating a bot in BotFather")
-    	return
+		return
 	}
 	var bot *tgbotapi.BotAPI
 	if len(URL) != 0 {
@@ -87,6 +89,21 @@ func feedThemBot() {
 
 	log.Printf("Successfully authorized on account %s", bot.Self.UserName)
 
+	if (SEND == "SEND") {
+		ticker := time.NewTicker(10 * time.Second)
+		quit := make(chan struct{})
+		for {
+			select {
+				case <- ticker.C:
+					log.Printf("tick")
+				case <- quit:
+					ticker.Stop()
+					return
+			}
+		}
+		return
+	}
+
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
@@ -98,6 +115,7 @@ func feedThemBot() {
 			msg := tgbotapi.NewMessage(chatID, dunnoMessage)
 			callbackData := update.CallbackQuery.Data
 			userName := update.CallbackQuery.From.UserName
+			// getUserState(userName)
 			log.Printf("[%s] %s", userName, update.CallbackQuery.Data)
 			mealsSet, _ := userMealsUTCSet(userName)
 			dayFrequency, _ := getUserSelectedFrequency(userName)
@@ -117,6 +135,7 @@ func feedThemBot() {
 				case "Submit":
 					msg = tgbotapi.NewMessage(chatID, "You are all set! Wait for the notifications")
 					bot.Send(msg)
+					migrateDailyUser(userName)
 					continue
 				case "Cancel":
 					msg = tgbotapi.NewMessage(chatID, "Okay...😢")
@@ -155,15 +174,15 @@ func feedThemBot() {
 				continue
 			} else if isSetMeal(callbackData) {
 				userName := update.CallbackQuery.From.UserName
-			    msg = tgbotapi.NewMessage(chatID, "When you’d like to have " + callbackData + "? \n(enter HH:MM:SS or HH:MM)")
-			    setUserMealEditIndex(userName, callbackData[:1])
-			    bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
+				msg = tgbotapi.NewMessage(chatID, "When you’d like to have " + callbackData + "? \n(enter HH:MM:SS or HH:MM)")
+				setUserMealEditIndex(userName, callbackData[:1])
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
 				bot.Send(msg)
 				continue
 			} else if isTimezone(callbackData) {
-			    setUserTimezone(userName, callbackData[len(callbackData)-3:])
-			    msg = tgbotapi.NewMessage(chatID, "Timezone has been set")
-		    	msg = tgbotapi.NewMessage(chatID, feedMeWelcomeMessage)
+				setUserTimezone(userName, callbackData[len(callbackData)-3:])
+				msg = tgbotapi.NewMessage(chatID, "Timezone has been set")
+				msg = tgbotapi.NewMessage(chatID, feedMeWelcomeMessage)
 				msg.ReplyMarkup = dayFreqReplies
 				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
 				bot.Send(msg)
@@ -185,9 +204,9 @@ func feedThemBot() {
 		userName := update.Message.From.UserName
 		log.Printf("[%s] %s", userName, update.Message.Text)
 		if (isText(update)) {
-			insertUser(userName) 
 			setUserPatience(userName, 2)
 			chatID := update.Message.Chat.ID
+			insertUser(userName, chatID) 
 			msg := tgbotapi.NewMessage(chatID, dunnoMessage)
 			msgText := update.Message.Text
 			mealsSet, _ := userMealsUTCSet(userName)
@@ -233,7 +252,7 @@ func feedThemBot() {
 				continue
 			}
 		} else {
-			insertUser(userName)
+			insertUser(userName, 1)
 			addUserPatience(userName, -1)
 		}
 		patience, err := getUserPatience(userName)
@@ -265,6 +284,10 @@ func initDB() {
 }
 
 func main() {
-	initDB()
-	feedThemBot()
+	if SEND == "SEND" {
+		feedThemBot()
+	} else {
+		initDB()
+		feedThemBot()
+	}
 }

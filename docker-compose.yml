@@ -20,3 +20,18 @@ services:
       PGPASSWORD: postgres
       PGPORT: 5432
       SSLMODE: disable
+
+  feedthembot-send:
+    build: .
+    ports:
+     - 8081:8081
+    links:
+      - db
+    environment:
+      PGHOST: db
+      PGDATABASE: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGPORT: 5432
+      SSLMODE: disable
+      SEND: SEND
