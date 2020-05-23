@@ -88,6 +88,24 @@ func selectIntValueFromUsers(valueType string, username string) (int, error) {
     return value, nil
 } 
 
+func selectInt64ValueFromUsers(valueType string, username string) (int64, error) {
+    db, err := sql.Open("postgres", dbInfo)
+    if err != nil {
+        return -100, err
+    }
+    defer db.Close()
+    var query string
+    query = "SELECT " + valueType + " FROM users WHERE username = '" + username + "';"
+    log.Printf("SQL successfully initialized to execute query: " + query)
+    row := db.QueryRow(query)
+    var value int64
+    err = row.Scan(&value)
+    if err != nil {
+        return -100, err
+    }
+    return value, nil
+}
+
 func execQuery(query string) error {
     db, err := sql.Open("postgres", dbInfo)
     if err != nil {
@@ -109,7 +127,7 @@ func insertUser(username string, chatID int64) error {
 }
 
 func migrateDailyUser(username string) error {
-    return execQuery("INSERT INTO usersDaily(userid, chatid, username, usermealsutc) SELECT userid, chatid, username, usermealsutc FROM users WHERE username = '" + username + "';")
+    return execQuery("INSERT INTO usersDaily(userid, chatid, username, usermealsutc) SELECT userid, chatid, username, usermealsutc FROM users WHERE username = '" + username + "' ON CONFLICT(username) DO UPDATE SET userid = excluded.userid, chatid = excluded.chatid, usermealsutc = excluded.usermealsutc;")
 }
 
 func clearInsertUser(username string) error {
@@ -190,6 +208,43 @@ func setUserMealEditIndex(username string, index string) error {
 }
 
 
+func getClosestDailyUsers() ([]string, error) {
+    var names []string
+    db, err := sql.Open("postgres", dbInfo)
+    if err != nil {
+        return names, err
+    }
+    defer db.Close()
+    var query string
+    query = `with joinedSchedule as 
+                (with schedule as 
+                    (select username, unnest(usermealsutc) as usertime from usersDaily order by usertime)
+                    select username, (DATE_PART('hour', usertime::time - now()::time))*60 + DATE_PART('minute', usertime::time - now()::time) as diff from schedule)
+            select username from joinedSchedule where diff > 0 and diff < 16;`
+    log.Printf("SQL successfully initialized to execute query: " + query)
+    rows, err := db.Query(query)
+    name := ""
+    for rows.Next() {
+        err := rows.Scan(&name)
+        if err != nil {
+            log.Fatal(err)
+        }
+        names = append(names, name)
+    }
+    namesstr := "[" + strings.Join(names, ",") + "]"
+    log.Printf("username " + namesstr)
+    if err != nil {
+        return names, err
+    }
+    return names, nil
+} 
+
+func syncTimezone(username string) error {
+    query := `update users set usermealsutc = (select array(select mealtime::time - '01:00:00'::time * usertimezone from (select usertimezone, unnest(usermealsutc) as mealtime from users where username = '` + username + `') as t1)::text[]) where username = '` + username + `';`
+    return execQuery(query)
+}
+
+
 func getUserTimezone(username string) (int, error) {
     return selectIntValueFromUsers("userTimezone", username)
 }
@@ -200,6 +255,10 @@ func getUserMealEditIndex(username string) (int, error) {
 
 func getUserSelectedFrequency(username string) (int, error) {
      return selectIntValueFromUsers("selectedFrequency", username)
+}
+
+func getUserChatID(username string) (int64, error) {
+     return selectInt64ValueFromUsers("chatID", username)
 }
 
 func getUserPatience(username string) (int, error) {

@@ -90,12 +90,18 @@ func feedThemBot() {
 	log.Printf("Successfully authorized on account %s", bot.Self.UserName)
 
 	if (SEND == "SEND") {
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(840 * time.Second)
 		quit := make(chan struct{})
 		for {
 			select {
 				case <- ticker.C:
 					log.Printf("tick")
+					users, _ := getClosestDailyUsers()
+					for _, userName := range users {
+					    chatID, _ := getUserChatID(userName)
+					    msg := tgbotapi.NewMessage(chatID, "Knock-knock. Who's there? Your stomach. \n Feed me! \n🍳🧀🥪🌮🥧🍦")
+						bot.Send(msg)
+					}
 				case <- quit:
 					ticker.Stop()
 					return
@@ -115,7 +121,6 @@ func feedThemBot() {
 			msg := tgbotapi.NewMessage(chatID, dunnoMessage)
 			callbackData := update.CallbackQuery.Data
 			userName := update.CallbackQuery.From.UserName
-			// getUserState(userName)
 			log.Printf("[%s] %s", userName, update.CallbackQuery.Data)
 			mealsSet, _ := userMealsUTCSet(userName)
 			dayFrequency, _ := getUserSelectedFrequency(userName)
@@ -135,6 +140,7 @@ func feedThemBot() {
 				case "Submit":
 					msg = tgbotapi.NewMessage(chatID, "You are all set! Wait for the notifications")
 					bot.Send(msg)
+					syncTimezone(userName)
 					migrateDailyUser(userName)
 					continue
 				case "Cancel":
