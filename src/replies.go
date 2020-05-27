@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/go-telegram-bot-api/telegram-bot-api"
+	"log"
+	"strings"
 )
 
 const (
@@ -24,6 +26,8 @@ const (
 	myFirstMealMessage     = "When you’d like to have breakfast?🍳"
 	mySetOtherMealsMessage = "When you’d like to have (set up time manually or set period):"
 )
+
+var mealEmojis = []string{"☕", "🥐", "🍏", "🧀", "🍌", "🥨", "🍓", "🍻"}
 
 var timezoneReplies = tgbotapi.NewInlineKeyboardMarkup(
 	tgbotapi.NewInlineKeyboardRow(
@@ -66,49 +70,16 @@ var setupReplies = tgbotapi.NewInlineKeyboardMarkup(
 
 var dayFreqReplies = tgbotapi.NewInlineKeyboardMarkup(
 	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("1", "1f"),
-		tgbotapi.NewInlineKeyboardButtonData("2", "2f"),
-		tgbotapi.NewInlineKeyboardButtonData("3", "3f"),
-		tgbotapi.NewInlineKeyboardButtonData("4", "4f"),
+		tgbotapi.NewInlineKeyboardButtonData("1"+mealEmojis[0], "1f"),
+		tgbotapi.NewInlineKeyboardButtonData("2"+mealEmojis[1], "2f"),
+		tgbotapi.NewInlineKeyboardButtonData("3"+mealEmojis[2], "3f"),
+		tgbotapi.NewInlineKeyboardButtonData("4"+mealEmojis[3], "4f"),
 	),
 	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("5", "5f"),
-		tgbotapi.NewInlineKeyboardButtonData("6", "6f"),
-		tgbotapi.NewInlineKeyboardButtonData("7", "7f"),
-		tgbotapi.NewInlineKeyboardButtonData("8", "8f"),
-	),
-)
-
-var mealReplies = tgbotapi.NewInlineKeyboardMarkup(
-	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("04:00", "04:00"),
-		tgbotapi.NewInlineKeyboardButtonData("05:00", "05:00"),
-		tgbotapi.NewInlineKeyboardButtonData("06:00", "06:00"),
-		tgbotapi.NewInlineKeyboardButtonData("07:00", "07:00"),
-	),
-	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("08:00", "08:00"),
-		tgbotapi.NewInlineKeyboardButtonData("09:00", "09:00"),
-		tgbotapi.NewInlineKeyboardButtonData("10:00", "10:00"),
-		tgbotapi.NewInlineKeyboardButtonData("11:00", "11:00"),
-	),
-	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("12:00", "12:00"),
-		tgbotapi.NewInlineKeyboardButtonData("13:00", "13:00"),
-		tgbotapi.NewInlineKeyboardButtonData("14:00", "14:00"),
-		tgbotapi.NewInlineKeyboardButtonData("15:00", "15:00"),
-	),
-	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("16:00", "16:00"),
-		tgbotapi.NewInlineKeyboardButtonData("17:00", "17:00"),
-		tgbotapi.NewInlineKeyboardButtonData("18:00", "18:00"),
-		tgbotapi.NewInlineKeyboardButtonData("19:00", "19:00"),
-	),
-	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("20:00", "20:00"),
-		tgbotapi.NewInlineKeyboardButtonData("21:00", "21:00"),
-		tgbotapi.NewInlineKeyboardButtonData("22:00", "22:00"),
-		tgbotapi.NewInlineKeyboardButtonData("23:00", "23:00"),
+		tgbotapi.NewInlineKeyboardButtonData("5"+mealEmojis[4], "5f"),
+		tgbotapi.NewInlineKeyboardButtonData("6"+mealEmojis[5], "6f"),
+		tgbotapi.NewInlineKeyboardButtonData("7"+mealEmojis[6], "7f"),
+		tgbotapi.NewInlineKeyboardButtonData("8"+mealEmojis[7], "8f"),
 	),
 )
 
@@ -121,17 +92,62 @@ var agreeDisagreeReplies = tgbotapi.NewInlineKeyboardMarkup(
 	),
 )
 
-func printMealTime(mealTime string) tgbotapi.InlineKeyboardMarkup {}
+func printMarkedMealReplies(meals []string) tgbotapi.InlineKeyboardMarkup {
+	var resultMealReplies = tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("06:00", "06:00"),
+			tgbotapi.NewInlineKeyboardButtonData("07:00", "07:00"),
+			tgbotapi.NewInlineKeyboardButtonData("08:00", "08:00"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("09:00", "09:00"),
+			tgbotapi.NewInlineKeyboardButtonData("10:00", "10:00"),
+			tgbotapi.NewInlineKeyboardButtonData("11:00", "11:00"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("12:00", "12:00"),
+			tgbotapi.NewInlineKeyboardButtonData("13:00", "13:00"),
+			tgbotapi.NewInlineKeyboardButtonData("14:00", "14:00"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("15:00", "15:00"),
+			tgbotapi.NewInlineKeyboardButtonData("16:00", "16:00"),
+			tgbotapi.NewInlineKeyboardButtonData("17:00", "17:00"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("18:00", "18:00"),
+			tgbotapi.NewInlineKeyboardButtonData("19:00", "19:00"),
+			tgbotapi.NewInlineKeyboardButtonData("20:00", "20:00"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("21:00", "21:00"),
+			tgbotapi.NewInlineKeyboardButtonData("22:00", "22:00"),
+			tgbotapi.NewInlineKeyboardButtonData("23:00", "23:00"),
+		),
+	)
+	log.Printf("[" + strings.Join(meals, ",") + "]")
+	for r, row := range resultMealReplies.InlineKeyboard {
+		for c, _ := range row {
+			for j, meal := range meals {
+				if resultMealReplies.InlineKeyboard[r][c].Text == meal {
+					resultMealReplies.InlineKeyboard[r][c].Text = resultMealReplies.InlineKeyboard[r][c].Text + mealEmojis[j]
+				}
+			}
+		}
+	}
+	return resultMealReplies
+}
 
 func printEditMealsReplies(mealsNumber int) tgbotapi.InlineKeyboardMarkup {
-	replies := [8]tgbotapi.InlineKeyboardButton{
-		tgbotapi.NewInlineKeyboardButtonData("2nd meal🥨", "2nd meal"),
-		tgbotapi.NewInlineKeyboardButtonData("3rd meal", "3rd meal"),
-		tgbotapi.NewInlineKeyboardButtonData("4th meal", "4th meal"),
-		tgbotapi.NewInlineKeyboardButtonData("5th meal", "5th meal"),
-		tgbotapi.NewInlineKeyboardButtonData("6th meal", "6th meal"),
-		tgbotapi.NewInlineKeyboardButtonData("7th meal", "7th meal"),
-		tgbotapi.NewInlineKeyboardButtonData("8th meal", "8th meal"),
+	replies := [9]tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("1st meal"+mealEmojis[0], "1st meal"),
+		tgbotapi.NewInlineKeyboardButtonData("2nd meal"+mealEmojis[1], "2nd meal"),
+		tgbotapi.NewInlineKeyboardButtonData("3rd meal"+mealEmojis[2], "3rd meal"),
+		tgbotapi.NewInlineKeyboardButtonData("4th meal"+mealEmojis[3], "4th meal"),
+		tgbotapi.NewInlineKeyboardButtonData("5th meal"+mealEmojis[4], "5th meal"),
+		tgbotapi.NewInlineKeyboardButtonData("6th meal"+mealEmojis[5], "6th meal"),
+		tgbotapi.NewInlineKeyboardButtonData("7th meal"+mealEmojis[6], "7th meal"),
+		tgbotapi.NewInlineKeyboardButtonData("8th meal"+mealEmojis[7], "8th meal"),
 		tgbotapi.NewInlineKeyboardButtonData("periodically", "periodically")}
 	var row1 []tgbotapi.InlineKeyboardButton
 	var row2 []tgbotapi.InlineKeyboardButton
@@ -140,7 +156,7 @@ func printEditMealsReplies(mealsNumber int) tgbotapi.InlineKeyboardMarkup {
 
 	half := mealsNumber / 2
 	row1 = append(row1, replies[:half]...)
-	row2 = append(row2, replies[half:mealsNumber-1]...)
+	row2 = append(row2, replies[half:mealsNumber]...)
 	row3 = append(row3, replies[len(replies)-1])
 	if mealsNumber == 2 {
 		firstMealReplies = tgbotapi.NewInlineKeyboardMarkup(

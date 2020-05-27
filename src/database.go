@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/lib/pq"
+	_ "github.com/lib/pq"
 	"log"
 	"os"
 	"strconv"
@@ -50,7 +50,6 @@ type User struct {
 	userTimezone      int
 	userMealEditIndex int
 	userMealsUTC      []string
-	isMealsSet        bool
 }
 
 func getUserData(username string) (*User, error) {
@@ -61,80 +60,17 @@ func getUserData(username string) (*User, error) {
 	}
 	defer db.Close()
 
-	row := db.QueryRow("SELECT (patience, selectedFrequency, userTimezone, userMealEditIndex) FROM users WHERE username = '" + username + "';")
-	err = row.Scan(&user.patience, &user.selectedFrequency, &user.userTimezone, &user.userMealEditIndex)
-
-	row = db.QueryRow("SELECT userMealsUTC FROM users WHERE username = '" + username + "';")
-	err = row.Scan(pq.Array(&user.userMealsUTC))
-
-	user.chatID, err = getUserChatID(username)
+	user.selectedFrequency, err = getUserSelectedFrequency(username)
+	user.userMealEditIndex, err = getUserMealEditIndex(username)
+	user.patience, err = getUserPatience(username)
+	user.userTimezone, err = getUserTimezone(username)
+	user.userMealsUTC, err = selectStringArrayValueFromUsers("SELECT UNNEST(userMealsUTC) FROM users WHERE username = '" + username + "';")
+	user.chatID, _ = getUserChatID(username)
 
 	if err != nil {
 		log.Printf("an error occured")
 	}
 	return user, nil
-}
-
-func getUserState(username string, userMessage string) string {
-	user, err := getUserData(username)
-	if err != nil {
-		return "error"
-	} else {
-		if user.patience == 2 {
-			return ""
-		}
-		return ""
-	}
-	return "none"
-}
-
-func getMessageState(username string, userMessage string) string {
-	user, err := getUserData(username)
-	if err != nil {
-		return "error"
-	} else {
-		if user.patience == 2 {
-			return ""
-		}
-		return ""
-	}
-	return "none"
-}
-
-func selectIntValueFromUsers(valueType string, username string) (int, error) {
-	db, err := sql.Open("postgres", dbInfo)
-	if err != nil {
-		return -100, err
-	}
-	defer db.Close()
-	var query string
-	query = "SELECT " + valueType + " FROM users WHERE username = '" + username + "';"
-	log.Printf("SQL successfully initialized to execute query: " + query)
-	row := db.QueryRow(query)
-	value := 0
-	err = row.Scan(&value)
-	if err != nil {
-		return -100, err
-	}
-	return value, nil
-}
-
-func selectInt64ValueFromUsers(valueType string, username string) (int64, error) {
-	db, err := sql.Open("postgres", dbInfo)
-	if err != nil {
-		return -100, err
-	}
-	defer db.Close()
-	var query string
-	query = "SELECT " + valueType + " FROM users WHERE username = '" + username + "';"
-	log.Printf("SQL successfully initialized to execute query: " + query)
-	row := db.QueryRow(query)
-	var value int64
-	err = row.Scan(&value)
-	if err != nil {
-		return -100, err
-	}
-	return value, nil
 }
 
 func execQuery(query string) error {
@@ -208,24 +144,6 @@ func userMealsUTCSet(username string) (bool, error) {
 	}
 }
 
-func userMealsUTCNotSet(username string) (*[]int, error) {
-	db, err := sql.Open("postgres", dbInfo)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
-	var query string
-	query = "SELECT array_positions((SELECT userMealsUTC FROM users WHERE username = " + username + "), null);"
-	log.Printf("SQL successfully initialized to execute query: " + query)
-	row := db.QueryRow(query)
-	var value []int
-	err = row.Scan(&value)
-	if err != nil {
-		return nil, err
-	}
-	return &value, nil
-}
-
 func setUserSelectedFrequency(username string, frequency string) error {
 	return execQuery("INSERT INTO users(username, selectedFrequency) VALUES ('" + username + "', " + frequency + ") ON CONFLICT (username) DO UPDATE SET selectedFrequency = " + frequency + ";")
 }
@@ -236,6 +154,68 @@ func setUserTimezone(username string, timezone string) error {
 
 func setUserMealEditIndex(username string, index string) error {
 	return execQuery("INSERT INTO users(username, userMealEditIndex) VALUES ('" + username + "', " + index + ") ON CONFLICT (username) DO UPDATE SET userMealEditIndex = " + index + ";")
+}
+
+func selectIntValueFromUsers(valueType string, username string) (int, error) {
+	db, err := sql.Open("postgres", dbInfo)
+	if err != nil {
+		return -100, err
+	}
+	defer db.Close()
+	var query string
+	query = "SELECT " + valueType + " FROM users WHERE username = '" + username + "';"
+	log.Printf("SQL successfully initialized to execute query: " + query)
+	row := db.QueryRow(query)
+	value := 0
+	err = row.Scan(&value)
+	if err != nil {
+		return -100, err
+	}
+	return value, nil
+}
+
+func selectInt64ValueFromUsers(valueType string, username string) (int64, error) {
+	db, err := sql.Open("postgres", dbInfo)
+	if err != nil {
+		return -100, err
+	}
+	defer db.Close()
+	var query string
+	query = "SELECT " + valueType + " FROM users WHERE username = '" + username + "';"
+	log.Printf("SQL successfully initialized to execute query: " + query)
+	row := db.QueryRow(query)
+	var value int64
+	err = row.Scan(&value)
+	if err != nil {
+		return -100, err
+	}
+	return value, nil
+}
+
+func selectStringArrayValueFromUsers(query string) ([]string, error) {
+	var result []string
+	db, err := sql.Open("postgres", dbInfo)
+	if err != nil {
+		return result, err
+	}
+	defer db.Close()
+	log.Printf("SQL successfully initialized to execute query: " + query)
+	rows, err := db.Query(query)
+	for rows.Next() {
+		var elem string
+		err := rows.Scan(&elem)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		result = append(result, elem)
+	}
+	namesstr := "[" + strings.Join(result, ",") + "]"
+	log.Printf("username " + namesstr)
+	if err != nil {
+		return result, err
+	}
+	return result, nil
 }
 
 func getClosestDailyUsers() ([]string, error) {

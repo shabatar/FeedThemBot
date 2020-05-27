@@ -15,9 +15,9 @@ func processCallback(userName string, callbackData string) (string, tgbotapi.Inl
 	msg := dunnoMessage
 	// TODO: detect blank replyMarkup
 	var err = errors.New("error processing callback: could not create keyboard buttons")
+	usr, _ := getUserData(userName)
 	if callbackData == "Feed Me!" {
-		userTimezone, _ := getUserTimezone(userName)
-		if userTimezone == -100 {
+		if usr.userTimezone == -100 {
 			msg = timezoneMessage
 			replyMarkup = timezoneReplies
 			err = nil
@@ -39,17 +39,17 @@ func processCallback(userName string, callbackData string) (string, tgbotapi.Inl
 		msg = "Shall you eat " + callbackData[:1] + " times per day!\n" + myFirstMealMessage
 		setUserSelectedFrequency(userName, callbackData[:1])
 		createUserDailyMeals(userName)
-		replyMarkup = mealReplies
+		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
 		err = nil
 	} else if isSetMeal(callbackData) {
 		msg = "When you’d like to have " + callbackData + "? \n"
 		setUserMealEditIndex(userName, callbackData[:1])
-		replyMarkup = mealReplies
+		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
 		err = nil
 	} else if isDayTime(callbackData) {
-		dayFrequency, _ := getUserSelectedFrequency(userName)
+		dayFrequency := usr.selectedFrequency
 		// Update first meal
-		mealEditIndex, _ := getUserMealEditIndex(userName)
+		mealEditIndex := usr.userMealEditIndex
 		if mealEditIndex == -100 {
 			setUserMealEditIndex(userName, "1")
 		}
@@ -72,6 +72,7 @@ func processCallback(userName string, callbackData string) (string, tgbotapi.Inl
 		replyMarkup = dayFreqReplies
 		err = nil
 	} else if callbackData == "/start" {
+		_ = clearInsertUser(userName)
 		msg = welcomeMessage
 		replyMarkup = setupReplies
 		err = nil
@@ -80,43 +81,6 @@ func processCallback(userName string, callbackData string) (string, tgbotapi.Inl
 		msg = welcomeMessage
 		replyMarkup = setupReplies
 		err = nil
-	} else if dayFrequency > 0 && mealsSet {
-		msg = "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?"
-		replyMarkup = agreeDisagreeReplies
-		err = nil
-	}
-	return msg, replyMarkup, err
-}
-
-func processText(userName string, messageText string) (string, tgbotapi.InlineKeyboardMarkup, error) {
-	mealsSet, _ := userMealsUTCSet(userName)
-	dayFrequency, _ := getUserSelectedFrequency(userName)
-	var replyMarkup tgbotapi.InlineKeyboardMarkup
-	msg := dunnoMessage
-	// TODO: detect blank replyMarkup
-	var err = errors.New("error processing callback: could not create keyboard buttons")
-	if messageText == "/start" {
-		msg = welcomeMessage
-	} else if messageText == "/restart" {
-		_ = clearInsertUser(userName)
-		msg = welcomeMessage
-		replyMarkup = setupReplies
-		err = nil
-	} else if isDayTime(messageText) {
-		// Update meal #K
-		_ = updateUserDailyMeal(userName, messageText)
-		mealsSet, _ = userMealsUTCSet(userName)
-		if dayFrequency > 0 && mealsSet {
-			msg = "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?"
-			replyMarkup = agreeDisagreeReplies
-			err = nil
-		} else if dayFrequency > 1 {
-			msg = "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n" + mySetOtherMealsMessage
-			replyMarkup = printEditMealsReplies(dayFrequency)
-			err = nil
-		} else {
-			msg = "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n"
-		}
 	} else if dayFrequency > 0 && mealsSet {
 		msg = "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?"
 		replyMarkup = agreeDisagreeReplies
@@ -189,7 +153,7 @@ func feedThemBot() {
 			}
 			_ = setUserPatience(userName, 2)
 			_ = insertUser(userName, chatID)
-			_, _ = bot.Send(msg)
+			bot.Send(msg)
 		} else {
 			insertUser(userName, 1)
 			addUserPatience(userName, -1)

@@ -4,16 +4,10 @@ import (
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"reflect"
 	"regexp"
-	"strconv"
 )
 
 func isText(update tgbotapi.Update) bool {
 	return reflect.TypeOf(update.Message.Text).Kind() == reflect.String && update.Message.Text != ""
-}
-
-func isInt(s string) bool {
-	_, err := strconv.Atoi(s)
-	return err == nil
 }
 
 func isDayFrequency(s string) bool {
@@ -27,7 +21,7 @@ func isDayTime(s string) bool {
 }
 
 func isSetMeal(s string) bool {
-	value, _ := regexp.MatchString(`\d[nrt][dh] meal`, s)
+	value, _ := regexp.MatchString(`\d[nrts][dht] meal`, s)
 	return value
 }
 
