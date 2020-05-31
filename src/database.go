@@ -33,7 +33,8 @@ const (
                                 userID SERIAL PRIMARY KEY,
                                 chatID BIGINT,
                                 username TEXT UNIQUE,
-                                userMealsUTC TEXT[]);`
+                                userMealsUTC TEXT[],
+                                stop BOOLEAN DEFAULT FALSE);`
 	createUsersTableQuery = `CREATE TABLE IF NOT EXISTS users(userID SERIAL PRIMARY KEY,
                                  chatID BIGINT,
                                  username TEXT UNIQUE,
@@ -42,6 +43,21 @@ const (
                                  userTimezone INT DEFAULT -100,
                                  userMealEditIndex INT DEFAULT -100,
                                  userMealsUTC TEXT[]);`
+	createBotDailyScheduleQuery = `CREATE TABLE IF NOT EXISTS dailySchedule(userID SERIAL PRIMARY KEY,
+                                 chatID BIGINT,
+                                 username TEXT,
+                                 mealTimeUTC TEXT,
+                                 unique (username, mealTimeUTC),
+                                 skipLunch BOOLEAN DEFAULT FALSE);`
+	createTimeDiffInMinutesFunctionQuery = `CREATE OR REPLACE FUNCTION diff(usertime text) RETURNS boolean AS
+									$$
+									DECLARE
+    									diff integer;
+									BEGIN
+									diff := (DATE_PART('hour', usertime::time - now()::time))*60 + DATE_PART('minute', usertime::time - now()::time);
+  									RETURN diff > 0 AND diff < 15;
+									END
+									$$ LANGUAGE plpgsql;`
 )
 
 type User struct {
@@ -99,6 +115,22 @@ func migrateDailyUser(username string) error {
 	return execQuery("INSERT INTO usersDaily(userid, chatid, username, usermealsutc) SELECT userid, chatid, username, usermealsutc FROM users WHERE username = '" + username + "' ON CONFLICT(username) DO UPDATE SET userid = excluded.userid, chatid = excluded.chatid, usermealsutc = excluded.usermealsutc;")
 }
 
+func stopDailySchedule(username string) error {
+	return execQuery("INSERT INTO usersDaily(username, stop) VALUES ('" + username + "', true) ON CONFLICT(username) DO UPDATE SET stop = excluded.stop;")
+}
+
+func updateDailySchedule() error {
+	return execQuery("insert into dailySchedule(chatid, username, mealtimeutc) select chatid, username, unnest(usermealsutc) mealtimeutc from usersDaily where stop = false on conflict(username, mealtimeutc) do update set chatid = excluded.chatid;")
+}
+
+func removeFromDailySchedule(username string) error {
+	return execQuery("delete from dailySchedule where username = '" + username + "';")
+}
+
+func removeStoppedFromDailySchedule() error {
+	return execQuery("delete from dailySchedule where username in (select username from usersDaily where stop = true);")
+}
+
 func clearInsertUser(username string) error {
 	return execQuery("INSERT INTO users(username) VALUES ('" + username + "') ON CONFLICT (username) DO UPDATE SET patience = DEFAULT, selectedFrequency = DEFAULT, userTimezone = DEFAULT, userMealEditIndex = DEFAULT, userMealsUTC = DEFAULT;")
 }
@@ -153,6 +185,10 @@ func userMealsUTCSet(username string) (bool, error) {
 	}
 }
 
+func setIntValueInTable(tablename string, username string, valuename string, value string) error {
+	return execQuery("INSERT INTO " + tablename + "(username, " + valuename + ") VALUES ('" + username + "', " + value + ") ON CONFLICT (username) DO UPDATE SET " + valuename + " = " + value + ";")
+}
+
 func setUserSelectedFrequency(username string, frequency string) error {
 	return execQuery("INSERT INTO users(username, selectedFrequency) VALUES ('" + username + "', " + frequency + ") ON CONFLICT (username) DO UPDATE SET selectedFrequency = " + frequency + ";")
 }
@@ -165,14 +201,14 @@ func setUserMealEditIndex(username string, index string) error {
 	return execQuery("INSERT INTO users(username, userMealEditIndex) VALUES ('" + username + "', " + index + ") ON CONFLICT (username) DO UPDATE SET userMealEditIndex = " + index + ";")
 }
 
-func selectIntValueFromUsers(valueType string, username string) (int, error) {
+func selectIntValueFromTable(tablename string, valueType string, username string) (int, error) {
 	db, err := sql.Open("postgres", dbInfo)
 	if err != nil {
 		return -100, err
 	}
 	defer db.Close()
 	var query string
-	query = "SELECT " + valueType + " FROM users WHERE username = '" + username + "';"
+	query = "SELECT " + valueType + " FROM " + tablename + " WHERE username = '" + username + "';"
 	log.Printf("SQL successfully initialized to execute query: " + query)
 	row := db.QueryRow(query)
 	value := 0
@@ -235,11 +271,7 @@ func getClosestDailyUsers() ([]string, error) {
 	}
 	defer db.Close()
 	var query string
-	query = `with joinedSchedule as 
-                (with schedule as 
-                    (select username, unnest(usermealsutc) as usertime from usersDaily order by usertime)
-                    select username, (DATE_PART('hour', usertime::time - now()::time))*60 + DATE_PART('minute', usertime::time - now()::time) as diff from schedule)
-            select username from joinedSchedule where diff > 0 and diff < 16;`
+	query = `select distinct username from dailySchedule where diff(mealtimeutc) = true and skipLunch = false;`
 	log.Printf("SQL successfully initialized to execute query: " + query)
 	rows, err := db.Query(query)
 	name := ""
@@ -264,15 +296,20 @@ func syncTimezone(username string) error {
 }
 
 func getUserTimezone(username string) (int, error) {
-	return selectIntValueFromUsers("userTimezone", username)
+	return selectIntValueFromTable("users", "userTimezone", username)
 }
 
 func getUserMealEditIndex(username string) (int, error) {
-	return selectIntValueFromUsers("userMealEditIndex", username)
+	return selectIntValueFromTable("users", "userMealEditIndex", username)
 }
 
 func getUserSelectedFrequency(username string) (int, error) {
-	return selectIntValueFromUsers("selectedFrequency", username)
+	return selectIntValueFromTable("users", "selectedFrequency", username)
+}
+
+func setDailyUserSkipLunch(username string) error {
+	query := `update dailySchedule set skipLunch = true where mealtimeutc in (select mealtimeutc from dailySchedule where username = '` + username + `' and diff(mealtimeutc) = true);`
+	return execQuery(query)
 }
 
 func getUserChatID(username string) (int64, error) {
@@ -280,7 +317,7 @@ func getUserChatID(username string) (int64, error) {
 }
 
 func getUserPatience(username string) (int, error) {
-	return selectIntValueFromUsers("patience", username)
+	return selectIntValueFromTable("users", "patience", username)
 }
 
 func createUsageTable() error {
@@ -293,4 +330,12 @@ func createDailyUsersTable() error {
 
 func createUsersTable() error {
 	return execQuery(createUsersTableQuery)
+}
+
+func createDailySchedule() error {
+	return execQuery(createBotDailyScheduleQuery)
+}
+
+func createDiffFunction() error {
+	return execQuery(createTimeDiffInMinutesFunctionQuery)
 }

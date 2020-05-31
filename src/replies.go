@@ -92,6 +92,15 @@ var agreeDisagreeReplies = tgbotapi.NewInlineKeyboardMarkup(
 	),
 )
 
+var skipLunchReplies = tgbotapi.NewInlineKeyboardMarkup(
+	tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("On my way!😋", "Skip meal"),
+	),
+	tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("Stop reminder", "Stop reminder"),
+	),
+)
+
 func printMarkedMealReplies(meals []string) *tgbotapi.InlineKeyboardMarkup {
 	var resultMealReplies = tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(

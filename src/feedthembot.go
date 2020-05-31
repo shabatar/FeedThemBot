@@ -27,9 +27,18 @@ func processCallback(userName string, callbackData string) (string, *tgbotapi.In
 		msg = "You are all set! Wait for the notifications"
 		syncTimezone(userName)
 		migrateDailyUser(userName)
+		updateDailySchedule()
 	} else if callbackData == "Cancel" {
 		msg = "Okay...😢"
 		createUserDailyMeals(userName)
+	} else if callbackData == "Skip meal" {
+		msg = "Okay, skipping meal."
+		setDailyUserSkipLunch(userName)
+	} else if callbackData == "Stop reminder" {
+		msg = "Okay, stopping reminder."
+		stopDailySchedule(userName)
+		updateDailySchedule()
+		removeStoppedFromDailySchedule()
 	} else if isDayFrequency(callbackData) {
 		msg = "Shall you eat " + callbackData[:1] + " times per day!\n" + myFirstMealMessage
 		setUserSelectedFrequency(userName, callbackData[:1])
@@ -63,12 +72,19 @@ func processCallback(userName string, callbackData string) (string, *tgbotapi.In
 		replyMarkup = &dayFreqReplies
 	} else if callbackData == "/start" {
 		_ = clearInsertUser(userName)
+		_ = removeFromDailySchedule(userName)
 		msg = welcomeMessage
 		replyMarkup = &setupReplies
 	} else if callbackData == "/restart" {
 		_ = clearInsertUser(userName)
+		_ = removeFromDailySchedule(userName)
 		msg = welcomeMessage
 		replyMarkup = &setupReplies
+	} else if callbackData == "/stop" {
+		msg = "Okay, stopping reminder."
+		stopDailySchedule(userName)
+		updateDailySchedule()
+		removeStoppedFromDailySchedule()
 	} else if dayFrequency > 0 && mealsSet {
 		msg = "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?"
 		replyMarkup = &agreeDisagreeReplies
@@ -101,15 +117,18 @@ func feedThemBot() {
 	log.Printf("Successfully authorized on account %s", bot.Self.UserName)
 
 	if SEND == "SEND" {
-		ticker := time.NewTicker(840 * time.Second)
+		ticker := time.NewTicker(30 * time.Second)
 		quit := make(chan struct{})
 		for {
 			select {
 			case <-ticker.C:
+				updateDailySchedule()
+				removeStoppedFromDailySchedule()
 				users, _ := getClosestDailyUsers()
 				for _, userName := range users {
 					chatID, _ := getUserChatID(userName)
 					msg := tgbotapi.NewMessage(chatID, "Knock-knock. Who's there? Your stomach. \nFeed me! \n🍳🧀🥪🌮🥧🍦")
+					msg.ReplyMarkup = skipLunchReplies
 					_, _ = bot.Send(msg)
 				}
 			case <-quit:
@@ -170,6 +189,12 @@ func initDB() {
 		panic(err)
 	}
 	if err := createUsersTable(); err != nil {
+		panic(err)
+	}
+	if err := createDailySchedule(); err != nil {
+		panic(err)
+	}
+	if err := createDiffFunction(); err != nil {
 		panic(err)
 	}
 }
