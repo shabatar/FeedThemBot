@@ -19,7 +19,7 @@ const (
 
 const (
 	feedMeWelcomeMessage  = "OK, I shall remind you whenever you ought to eat. \nHow many meal reminders you'd like to have each day?"
-	feedPetWelcomeMessage = "I don't know how to feed someone else. Sorry 😢"
+	feedPetWelcomeMessage = "OK then, I shall remind whenever your friend or pet ought to eat. \nBut hmm, what's their name?"
 )
 
 const (
@@ -92,7 +92,7 @@ var agreeDisagreeReplies = tgbotapi.NewInlineKeyboardMarkup(
 	),
 )
 
-func printMarkedMealReplies(meals []string) tgbotapi.InlineKeyboardMarkup {
+func printMarkedMealReplies(meals []string) *tgbotapi.InlineKeyboardMarkup {
 	var resultMealReplies = tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("06:00", "06:00"),
@@ -135,10 +135,10 @@ func printMarkedMealReplies(meals []string) tgbotapi.InlineKeyboardMarkup {
 			}
 		}
 	}
-	return resultMealReplies
+	return &resultMealReplies
 }
 
-func printEditMealsReplies(mealsNumber int) tgbotapi.InlineKeyboardMarkup {
+func printEditMealsReplies(mealsNumber int) *tgbotapi.InlineKeyboardMarkup {
 	replies := [9]tgbotapi.InlineKeyboardButton{
 		tgbotapi.NewInlineKeyboardButtonData("1st meal"+mealEmojis[0], "1st meal"),
 		tgbotapi.NewInlineKeyboardButtonData("2nd meal"+mealEmojis[1], "2nd meal"),
@@ -163,12 +163,12 @@ func printEditMealsReplies(mealsNumber int) tgbotapi.InlineKeyboardMarkup {
 			row1,
 			row3,
 		)
-		return firstMealReplies
+		return &firstMealReplies
 	}
 	firstMealReplies = tgbotapi.NewInlineKeyboardMarkup(
 		row1,
 		row2,
 		row3,
 	)
-	return firstMealReplies
+	return &firstMealReplies
 }

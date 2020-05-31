@@ -25,8 +25,10 @@ const (
                                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                 username TEXT,
                                 chatID BIGINT,
-                                message TEXT,
-                                answer TEXT);`
+								messageID INT,
+                                messageText TEXT,
+                                answerID INT,
+								answerText TEXT);`
 	createDailySubscribersTableQuery = `CREATE TABLE IF NOT EXISTS usersDaily(
                                 userID SERIAL PRIMARY KEY,
                                 chatID BIGINT,
@@ -123,6 +125,13 @@ func updateUserDailyMeal(username string, mealTime string) error {
 	a, _ := getUserMealEditIndex(username)
 	log.Printf("userMealEditIndex =  : " + strconv.Itoa(a))
 	return execQuery("UPDATE users SET userMealsUTC[" + "(SELECT userMealEditIndex FROM users WHERE username = '" + username + "')" + "-1] = '" + mealTime + "' WHERE username = '" + username + "';")
+}
+
+func insertUsageStats(username string, chatID int64, messageID int, messageText string, answerID int, answerText string) error {
+	answerText = strings.Replace(answerText, "'", ``, -1)
+	messageText = strings.Replace(messageText, "'", ``, -1)
+	return execQuery("INSERT INTO usage(username, chatID, messageID, messageText, answerID, answerText) VALUES('" +
+		username + "', " + strconv.FormatInt(chatID, 10) + ", " + strconv.Itoa(messageID) + ", '" + messageText + "'," + strconv.Itoa(answerID) + ", '" + answerText + "');")
 }
 
 func userMealsUTCSet(username string) (bool, error) {

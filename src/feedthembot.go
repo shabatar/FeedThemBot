@@ -1,30 +1,25 @@
 package main
 
 import (
-	"errors"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"log"
 	"strconv"
 	"time"
 )
 
-func processCallback(userName string, callbackData string) (string, tgbotapi.InlineKeyboardMarkup, error) {
+func processCallback(userName string, callbackData string) (string, *tgbotapi.InlineKeyboardMarkup) {
 	mealsSet, _ := userMealsUTCSet(userName)
 	dayFrequency, _ := getUserSelectedFrequency(userName)
-	var replyMarkup tgbotapi.InlineKeyboardMarkup
+	var replyMarkup *tgbotapi.InlineKeyboardMarkup
 	msg := dunnoMessage
-	// TODO: detect blank replyMarkup
-	var err = errors.New("error processing callback: could not create keyboard buttons")
 	usr, _ := getUserData(userName)
 	if callbackData == "Feed Me!" {
 		if usr.userTimezone == -100 {
 			msg = timezoneMessage
-			replyMarkup = timezoneReplies
-			err = nil
+			replyMarkup = &timezoneReplies
 		} else {
 			msg = feedMeWelcomeMessage
-			replyMarkup = dayFreqReplies
-			err = nil
+			replyMarkup = &dayFreqReplies
 		}
 	} else if callbackData == "Feed Someone Else!" {
 		msg = feedPetWelcomeMessage
@@ -40,12 +35,10 @@ func processCallback(userName string, callbackData string) (string, tgbotapi.Inl
 		setUserSelectedFrequency(userName, callbackData[:1])
 		createUserDailyMeals(userName)
 		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
-		err = nil
 	} else if isSetMeal(callbackData) {
 		msg = "When you’d like to have " + callbackData + "? \n"
 		setUserMealEditIndex(userName, callbackData[:1])
 		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
-		err = nil
 	} else if isDayTime(callbackData) {
 		dayFrequency := usr.selectedFrequency
 		// Update first meal
@@ -57,36 +50,45 @@ func processCallback(userName string, callbackData string) (string, tgbotapi.Inl
 		mealsSet, _ = userMealsUTCSet(userName)
 		if dayFrequency > 0 && mealsSet {
 			msg = "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?"
-			replyMarkup = agreeDisagreeReplies
-			err = nil
+			replyMarkup = &agreeDisagreeReplies
 		} else if dayFrequency > 1 {
 			msg = "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n" + mySetOtherMealsMessage
 			replyMarkup = printEditMealsReplies(dayFrequency)
-			err = nil
 		} else {
 			msg = "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n"
 		}
 	} else if isTimezone(callbackData) {
 		setUserTimezone(userName, callbackData[len(callbackData)-3:])
 		msg = feedMeWelcomeMessage
-		replyMarkup = dayFreqReplies
-		err = nil
+		replyMarkup = &dayFreqReplies
 	} else if callbackData == "/start" {
 		_ = clearInsertUser(userName)
 		msg = welcomeMessage
-		replyMarkup = setupReplies
-		err = nil
+		replyMarkup = &setupReplies
 	} else if callbackData == "/restart" {
 		_ = clearInsertUser(userName)
 		msg = welcomeMessage
-		replyMarkup = setupReplies
-		err = nil
+		replyMarkup = &setupReplies
 	} else if dayFrequency > 0 && mealsSet {
 		msg = "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?"
-		replyMarkup = agreeDisagreeReplies
-		err = nil
+		replyMarkup = &agreeDisagreeReplies
 	}
-	return msg, replyMarkup, err
+	return msg, replyMarkup
+}
+
+func processUpdate(bot *tgbotapi.BotAPI, userName string, chatID int64, messageID int, messageText string, callbackID string) {
+	answerText, replyMarkup := processCallback(userName, messageText)
+	msg := tgbotapi.NewMessage(chatID, answerText)
+	if replyMarkup != nil {
+		msg.ReplyMarkup = *replyMarkup
+	}
+	_ = setUserPatience(userName, 2)
+	_ = insertUser(userName, chatID)
+	answer, _ := bot.Send(msg)
+	if callbackID != "" {
+		_, _ = bot.AnswerCallbackQuery(tgbotapi.NewCallback(callbackID, msg.Text))
+	}
+	insertUsageStats(userName, chatID, messageID, messageText, answer.MessageID, answer.Text)
 }
 
 func feedThemBot() {
@@ -128,14 +130,7 @@ func feedThemBot() {
 			callbackData := update.CallbackQuery.Data
 			userName := update.CallbackQuery.From.UserName
 			log.Printf("[%s] %s", userName, update.CallbackQuery.Data)
-
-			msgText, replyMarkup, err := processCallback(userName, callbackData)
-			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, msgText)
-			if err == nil {
-				msg.ReplyMarkup = replyMarkup
-			}
-			_, _ = bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, msg.Text))
-			_, _ = bot.Send(msg)
+			processUpdate(bot, userName, update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Message.MessageID, callbackData, update.CallbackQuery.ID)
 			continue
 		}
 		if update.Message == nil {
@@ -144,16 +139,7 @@ func feedThemBot() {
 		userName := update.Message.From.UserName
 		log.Printf("[%s] %s", userName, update.Message.Text)
 		if isText(update) {
-			chatID := update.Message.Chat.ID
-			msgText := update.Message.Text
-			answerText, replyMarkup, err := processCallback(userName, msgText)
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, answerText)
-			if err == nil {
-				msg.ReplyMarkup = replyMarkup
-			}
-			_ = setUserPatience(userName, 2)
-			_ = insertUser(userName, chatID)
-			bot.Send(msg)
+			processUpdate(bot, userName, update.Message.Chat.ID, update.Message.MessageID, update.Message.Text, "")
 		} else {
 			insertUser(userName, 1)
 			addUserPatience(userName, -1)
@@ -164,12 +150,14 @@ func feedThemBot() {
 		}
 		if patience == 0 {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, patienceMessage1)
-			bot.Send(msg)
+			answer, _ := bot.Send(msg)
+			insertUsageStats(userName, update.Message.Chat.ID, update.Message.MessageID, "impatient", answer.MessageID, answer.Text)
 		}
 		if patience < 0 {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, patienceMessage2)
-			bot.Send(msg)
+			answer, _ := bot.Send(msg)
 			setUserPatience(userName, 1)
+			insertUsageStats(userName, update.Message.Chat.ID, update.Message.MessageID, "impatient", answer.MessageID, answer.Text)
 		}
 	}
 }
