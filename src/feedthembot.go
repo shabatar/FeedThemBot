@@ -7,96 +7,103 @@ import (
 	"time"
 )
 
-func processCallback(userName string, callbackData string) (string, *tgbotapi.InlineKeyboardMarkup) {
-	mealsSet, _ := userMealsUTCSet(userName)
-	dayFrequency, _ := getUserSelectedFrequency(userName)
-	var replyMarkup *tgbotapi.InlineKeyboardMarkup
-	msg := dunnoMessage
+func processCallback(userName string, callbackData string) (msg string, replyMarkup *tgbotapi.InlineKeyboardMarkup, payload string) {
+	msg = dunnoMessage
+	payload = "dunno"
 	usr, _ := getUserData(userName)
 	if callbackData == "Feed Me!" {
 		if usr.userTimezone == -100 {
 			msg = timezoneMessage
+			payload = "timezone"
 			replyMarkup = &timezoneReplies
 		} else {
-			msg = feedMeWelcomeMessage
-			replyMarkup = &dayFreqReplies
+			msg = explanationMessage
+			payload = "editFirst"
+			usr, _ = getUserData(userName)
+			replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
 		}
-	} else if callbackData == "Feed Someone Else!" {
-		msg = feedPetWelcomeMessage
 	} else if callbackData == "Submit" {
 		msg = "You are all set! Wait for the notifications"
+		payload = "submit"
 		syncTimezone(userName)
 		migrateDailyUser(userName)
 		updateDailySchedule()
 	} else if callbackData == "Cancel" {
-		msg = "Okay...😢"
+		msg = explanationMessage
+		payload = "editNext"
 		createUserDailyMeals(userName)
+		usr, _ = getUserData(userName)
+		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
 	} else if callbackData == "Skip meal" {
 		msg = "Okay, skipping meal."
+		payload = "skip"
 		setDailyUserSkipLunch(userName)
 	} else if callbackData == "Stop reminder" {
 		msg = "Okay, stopping reminder."
+		payload = "stop"
 		stopDailySchedule(userName)
 		updateDailySchedule()
 		removeStoppedFromDailySchedule()
-	} else if isDayFrequency(callbackData) {
-		msg = "Shall you eat " + callbackData[:1] + " times per day!\n" + myFirstMealMessage
-		setUserSelectedFrequency(userName, callbackData[:1])
-		createUserDailyMeals(userName)
-		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
-	} else if isSetMeal(callbackData) {
-		msg = "When you’d like to have " + callbackData + "? \n"
-		setUserMealEditIndex(userName, callbackData[:1])
-		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
 	} else if isDayTime(callbackData) {
-		dayFrequency := usr.selectedFrequency
-		// Update first meal
+		msg = explanationMessage
+		payload = "editNext"
 		mealEditIndex := usr.userMealEditIndex
 		if mealEditIndex == -100 {
 			setUserMealEditIndex(userName, "1")
+		} else {
+			setUserMealEditIndex(userName, strconv.Itoa(usr.userMealEditIndex+1))
 		}
 		updateUserDailyMeal(userName, callbackData)
-		mealsSet, _ = userMealsUTCSet(userName)
-		if dayFrequency > 0 && mealsSet {
-			msg = "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?"
-			replyMarkup = &agreeDisagreeReplies
-		} else if dayFrequency > 1 {
-			msg = "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n" + mySetOtherMealsMessage
-			replyMarkup = printEditMealsReplies(dayFrequency)
-		} else {
-			msg = "You eat " + strconv.Itoa(dayFrequency) + " meals/day\n"
-		}
+		usr, _ = getUserData(userName)
+		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
 	} else if isTimezone(callbackData) {
 		setUserTimezone(userName, callbackData[len(callbackData)-3:])
-		msg = feedMeWelcomeMessage
-		replyMarkup = &dayFreqReplies
+		msg = explanationMessage
+		payload = "editFirst"
+		usr, _ = getUserData(userName)
+		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
 	} else if callbackData == "/start" {
 		_ = clearInsertUser(userName)
 		_ = removeFromDailySchedule(userName)
 		msg = welcomeMessage
 		replyMarkup = &setupReplies
+		payload = "welcome"
 	} else if callbackData == "/restart" {
 		_ = clearInsertUser(userName)
 		_ = removeFromDailySchedule(userName)
 		msg = welcomeMessage
 		replyMarkup = &setupReplies
+		payload = "welcome"
 	} else if callbackData == "/stop" {
 		msg = "Okay, stopping reminder."
 		stopDailySchedule(userName)
 		updateDailySchedule()
 		removeStoppedFromDailySchedule()
-	} else if dayFrequency > 0 && mealsSet {
-		msg = "You have successfully set " + strconv.Itoa(dayFrequency) + " meals/day\n" + "\n Agree?"
-		replyMarkup = &agreeDisagreeReplies
+		payload = "stop"
 	}
-	return msg, replyMarkup
+	return msg, replyMarkup, payload
 }
 
 func processUpdate(bot *tgbotapi.BotAPI, userName string, chatID int64, messageID int, messageText string, callbackID string) {
-	answerText, replyMarkup := processCallback(userName, messageText)
+	answerText, replyMarkup, payload := processCallback(userName, messageText)
 	msg := tgbotapi.NewMessage(chatID, answerText)
 	if replyMarkup != nil {
 		msg.ReplyMarkup = *replyMarkup
+	}
+	if payload == "editNext" {
+		editMessageID, _ := getMessageIDFromUsage(userName, "editFirst")
+		edit := tgbotapi.EditMessageTextConfig{
+			BaseEdit: tgbotapi.BaseEdit{
+				ChatID:      msg.BaseChat.ChatID,
+				MessageID:   editMessageID,
+				ReplyMarkup: replyMarkup,
+			},
+			Text:      msg.Text,
+			ParseMode: "HTML",
+		}
+		answer, _ := bot.Send(edit)
+		insertUsageStats(userName, chatID, messageID, messageText, answer.MessageID, answer.Text, payload)
+		return
 	}
 	_ = setUserPatience(userName, 2)
 	_ = insertUser(userName, chatID)
@@ -104,7 +111,7 @@ func processUpdate(bot *tgbotapi.BotAPI, userName string, chatID int64, messageI
 	if callbackID != "" {
 		_, _ = bot.AnswerCallbackQuery(tgbotapi.NewCallback(callbackID, msg.Text))
 	}
-	insertUsageStats(userName, chatID, messageID, messageText, answer.MessageID, answer.Text)
+	insertUsageStats(userName, chatID, messageID, messageText, answer.MessageID, answer.Text, payload)
 }
 
 func feedThemBot() {
@@ -170,13 +177,13 @@ func feedThemBot() {
 		if patience == 0 {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, patienceMessage1)
 			answer, _ := bot.Send(msg)
-			insertUsageStats(userName, update.Message.Chat.ID, update.Message.MessageID, "impatient", answer.MessageID, answer.Text)
+			insertUsageStats(userName, update.Message.Chat.ID, update.Message.MessageID, "impatient", answer.MessageID, answer.Text, "impatient1")
 		}
 		if patience < 0 {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, patienceMessage2)
 			answer, _ := bot.Send(msg)
 			setUserPatience(userName, 1)
-			insertUsageStats(userName, update.Message.Chat.ID, update.Message.MessageID, "impatient", answer.MessageID, answer.Text)
+			insertUsageStats(userName, update.Message.Chat.ID, update.Message.MessageID, "impatient", answer.MessageID, answer.Text, "impatient2")
 		}
 	}
 }

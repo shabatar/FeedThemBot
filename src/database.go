@@ -28,7 +28,8 @@ const (
 								messageID INT,
                                 messageText TEXT,
                                 answerID INT,
-								answerText TEXT);`
+								answerText TEXT,
+                                payLoad TEXT);`
 	createDailySubscribersTableQuery = `CREATE TABLE IF NOT EXISTS usersDaily(
                                 userID SERIAL PRIMARY KEY,
                                 chatID BIGINT,
@@ -39,7 +40,6 @@ const (
                                  chatID BIGINT,
                                  username TEXT UNIQUE,
                                  patience INT DEFAULT 2,
-                                 selectedFrequency INT DEFAULT 0,
                                  userTimezone INT DEFAULT -100,
                                  userMealEditIndex INT DEFAULT -100,
                                  userMealsUTC TEXT[]);`
@@ -64,7 +64,6 @@ type User struct {
 	chatID            int64
 	username          string
 	patience          int
-	selectedFrequency int
 	userTimezone      int
 	userMealEditIndex int
 	userMealsUTC      []string
@@ -78,7 +77,6 @@ func getUserData(username string) (*User, error) {
 	}
 	defer db.Close()
 
-	user.selectedFrequency, err = getUserSelectedFrequency(username)
 	user.userMealEditIndex, err = getUserMealEditIndex(username)
 	user.patience, err = getUserPatience(username)
 	user.userTimezone, err = getUserTimezone(username)
@@ -144,13 +142,7 @@ func setUserPatience(username string, patience int) error {
 }
 
 func createUserDailyMeals(username string) error {
-	frequency, _ := getUserSelectedFrequency(username)
-	emptyMeals := make([]string, frequency-1)
-	for i := 0; i < frequency-1; i++ {
-		emptyMeals[i] = "null"
-	}
-	meals := "[" + strings.Join(emptyMeals, ",") + "]"
-	return execQuery("INSERT INTO users(username, userMealsUTC) VALUES ('" + username + "', ARRAY" + meals + "::TEXT[]) ON CONFLICT (username) DO UPDATE SET userMealsUTC = ARRAY" + meals + "::TEXT[];")
+	return execQuery("INSERT INTO users(username, userMealsUTC) VALUES ('" + username + "', ARRAY[]::TEXT[]) ON CONFLICT (username) DO UPDATE SET userMealsUTC = ARRAY[]::TEXT[];")
 }
 
 func updateUserDailyMeal(username string, mealTime string) error {
@@ -159,38 +151,22 @@ func updateUserDailyMeal(username string, mealTime string) error {
 	return execQuery("UPDATE users SET userMealsUTC[" + "(SELECT userMealEditIndex FROM users WHERE username = '" + username + "')" + "-1] = '" + mealTime + "' WHERE username = '" + username + "';")
 }
 
-func insertUsageStats(username string, chatID int64, messageID int, messageText string, answerID int, answerText string) error {
+func insertUsageStats(username string, chatID int64, messageID int, messageText string, answerID int, answerText string, payload string) error {
 	answerText = strings.Replace(answerText, "'", ``, -1)
 	messageText = strings.Replace(messageText, "'", ``, -1)
-	return execQuery("INSERT INTO usage(username, chatID, messageID, messageText, answerID, answerText) VALUES('" +
-		username + "', " + strconv.FormatInt(chatID, 10) + ", " + strconv.Itoa(messageID) + ", '" + messageText + "'," + strconv.Itoa(answerID) + ", '" + answerText + "');")
-}
-
-func userMealsUTCSet(username string) (bool, error) {
-	db, err := sql.Open("postgres", dbInfo)
-	if err != nil {
-		return false, err
-	}
-	defer db.Close()
-	var query string
-	query = "SELECT array_position((SELECT userMealsUTC FROM users WHERE username = '" + username + "'), null);"
-	log.Printf("SQL successfully initialized to execute query: " + query)
-	row := db.QueryRow(query)
-	value := -100
-	err = row.Scan(&value)
-	if value == -100 {
-		return true, err
-	} else {
-		return false, err
-	}
+	query := fmt.Sprintf("INSERT INTO usage(username, chatID, messageID, messageText, answerID, answerText, payLoad) VALUES('%s','%s','%s','%s','%s','%s','%s')",
+		username,
+		strconv.FormatInt(chatID, 10),
+		strconv.Itoa(messageID),
+		messageText,
+		strconv.Itoa(answerID),
+		answerText,
+		payload)
+	return execQuery(query)
 }
 
 func setIntValueInTable(tablename string, username string, valuename string, value string) error {
 	return execQuery("INSERT INTO " + tablename + "(username, " + valuename + ") VALUES ('" + username + "', " + value + ") ON CONFLICT (username) DO UPDATE SET " + valuename + " = " + value + ";")
-}
-
-func setUserSelectedFrequency(username string, frequency string) error {
-	return execQuery("INSERT INTO users(username, selectedFrequency) VALUES ('" + username + "', " + frequency + ") ON CONFLICT (username) DO UPDATE SET selectedFrequency = " + frequency + ";")
 }
 
 func setUserTimezone(username string, timezone string) error {
@@ -303,8 +279,22 @@ func getUserMealEditIndex(username string) (int, error) {
 	return selectIntValueFromTable("users", "userMealEditIndex", username)
 }
 
-func getUserSelectedFrequency(username string) (int, error) {
-	return selectIntValueFromTable("users", "selectedFrequency", username)
+func getMessageIDFromUsage(username string, payload string) (int, error) {
+	db, err := sql.Open("postgres", dbInfo)
+	if err != nil {
+		return -100, err
+	}
+	defer db.Close()
+	var query string
+	query = "SELECT answerID FROM usage WHERE username = '" + username + "' AND payLoad = '" + payload + "' ORDER BY timestamp DESC LIMIT 1;"
+	log.Printf("SQL successfully initialized to execute query: " + query)
+	row := db.QueryRow(query)
+	value := 0
+	err = row.Scan(&value)
+	if err != nil {
+		return -100, err
+	}
+	return value, nil
 }
 
 func setDailyUserSkipLunch(username string) error {

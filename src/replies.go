@@ -7,27 +7,18 @@ import (
 )
 
 const (
-	welcomeMessage = "Hi there!👋 \nMy name is FeedThemBot and I am here to help you eat regularly. I know, it's hard! 😫" +
-		" \nI could remind you when you should probably grab a bite 😋" +
-		" \nJust press a button below and set up a meal notification.\n" +
-		"I will notify you with cheerful message once time's up 🍏"
-	timezoneMessage  = "First, I need you to select your timezone in order to deliver messages at right time ⏳"
-	patienceMessage1 = "Hmmm... I'm not sure if you're using me the right way 🤔"
-	patienceMessage2 = "Whatever you are doing, could you please stop it? 🙏"
-	dunnoMessage     = "I don't know what to do. Sorry 😢"
+	welcomeMessage = "Hi there!👋 \nMy name is FeedThemBot and I am here to help you eat regularly. \nI know, it's hard! 😫" +
+		" \nI could remind you when you should grab a bite 😋" +
+		" \nJust press a button below and set up a daily meal notification.\n" +
+		"I will notify you with cheerful message shortly before time's up 🍏"
+	timezoneMessage    = "First, I need you to select your timezone in order to deliver messages at right time ⏳"
+	explanationMessage = "Now, let's set daily meal notifications.\nWhat time would you like to be notified each day?\n\nTap on buttons below and select one or more meals.\nOnce done, tap Submit to confirm."
+	patienceMessage1   = "Hmmm... I'm not sure if you're using me the right way 🤔"
+	patienceMessage2   = "Whatever you are doing, could you please stop it? 🙏"
+	dunnoMessage       = "I don't know what to do. Sorry 😢"
 )
 
-const (
-	feedMeWelcomeMessage  = "OK, I shall remind you whenever you ought to eat. \nHow many meal reminders you'd like to have each day?"
-	feedPetWelcomeMessage = "OK then, I shall remind whenever your friend or pet ought to eat. \nBut hmm, what's their name?"
-)
-
-const (
-	myFirstMealMessage     = "When you’d like to have breakfast?🍳"
-	mySetOtherMealsMessage = "When you’d like to have (set up time manually or set period):"
-)
-
-var mealEmojis = []string{"☕", "🥐", "🍏", "🧀", "🍌", "🥨", "🍓", "🍻"}
+var mealEmojis = []string{"☕", "🥐", "🍏", "🧀", "🍌", "🥨", "🍓", "🍻", "🍞", "🥕", "🥦", "🌽", "🍕", "🍩", "🍪", "🍳", "🥚", "🍆", "🍰"}
 
 var timezoneReplies = tgbotapi.NewInlineKeyboardMarkup(
 	tgbotapi.NewInlineKeyboardRow(
@@ -62,24 +53,6 @@ var timezoneReplies = tgbotapi.NewInlineKeyboardMarkup(
 var setupReplies = tgbotapi.NewInlineKeyboardMarkup(
 	tgbotapi.NewInlineKeyboardRow(
 		tgbotapi.NewInlineKeyboardButtonData("Feed Me!", "Feed Me!"),
-	),
-	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("Feed Someone Else! (tbd)", "Feed Someone Else!"),
-	),
-)
-
-var dayFreqReplies = tgbotapi.NewInlineKeyboardMarkup(
-	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("1"+mealEmojis[0], "1f"),
-		tgbotapi.NewInlineKeyboardButtonData("2"+mealEmojis[1], "2f"),
-		tgbotapi.NewInlineKeyboardButtonData("3"+mealEmojis[2], "3f"),
-		tgbotapi.NewInlineKeyboardButtonData("4"+mealEmojis[3], "4f"),
-	),
-	tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("5"+mealEmojis[4], "5f"),
-		tgbotapi.NewInlineKeyboardButtonData("6"+mealEmojis[5], "6f"),
-		tgbotapi.NewInlineKeyboardButtonData("7"+mealEmojis[6], "7f"),
-		tgbotapi.NewInlineKeyboardButtonData("8"+mealEmojis[7], "8f"),
 	),
 )
 
@@ -133,6 +106,10 @@ func printMarkedMealReplies(meals []string) *tgbotapi.InlineKeyboardMarkup {
 			tgbotapi.NewInlineKeyboardButtonData("22:00", "22:00"),
 			tgbotapi.NewInlineKeyboardButtonData("23:00", "23:00"),
 		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Clear", "Cancel"),
+			tgbotapi.NewInlineKeyboardButtonData("Submit", "Submit"),
+		),
 	)
 	log.Printf("[" + strings.Join(meals, ",") + "]")
 	for r, row := range resultMealReplies.InlineKeyboard {
@@ -145,39 +122,4 @@ func printMarkedMealReplies(meals []string) *tgbotapi.InlineKeyboardMarkup {
 		}
 	}
 	return &resultMealReplies
-}
-
-func printEditMealsReplies(mealsNumber int) *tgbotapi.InlineKeyboardMarkup {
-	replies := [9]tgbotapi.InlineKeyboardButton{
-		tgbotapi.NewInlineKeyboardButtonData("1st meal"+mealEmojis[0], "1st meal"),
-		tgbotapi.NewInlineKeyboardButtonData("2nd meal"+mealEmojis[1], "2nd meal"),
-		tgbotapi.NewInlineKeyboardButtonData("3rd meal"+mealEmojis[2], "3rd meal"),
-		tgbotapi.NewInlineKeyboardButtonData("4th meal"+mealEmojis[3], "4th meal"),
-		tgbotapi.NewInlineKeyboardButtonData("5th meal"+mealEmojis[4], "5th meal"),
-		tgbotapi.NewInlineKeyboardButtonData("6th meal"+mealEmojis[5], "6th meal"),
-		tgbotapi.NewInlineKeyboardButtonData("7th meal"+mealEmojis[6], "7th meal"),
-		tgbotapi.NewInlineKeyboardButtonData("8th meal"+mealEmojis[7], "8th meal"),
-		tgbotapi.NewInlineKeyboardButtonData("periodically", "periodically")}
-	var row1 []tgbotapi.InlineKeyboardButton
-	var row2 []tgbotapi.InlineKeyboardButton
-	var row3 []tgbotapi.InlineKeyboardButton
-	var firstMealReplies tgbotapi.InlineKeyboardMarkup
-
-	half := mealsNumber / 2
-	row1 = append(row1, replies[:half]...)
-	row2 = append(row2, replies[half:mealsNumber]...)
-	row3 = append(row3, replies[len(replies)-1])
-	if mealsNumber == 2 {
-		firstMealReplies = tgbotapi.NewInlineKeyboardMarkup(
-			row1,
-			row3,
-		)
-		return &firstMealReplies
-	}
-	firstMealReplies = tgbotapi.NewInlineKeyboardMarkup(
-		row1,
-		row2,
-		row3,
-	)
-	return &firstMealReplies
 }
