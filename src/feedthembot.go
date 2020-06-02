@@ -20,22 +20,24 @@ func processCallback(userName string, callbackData string) (msg string, replyMar
 			msg = explanationMessage
 			payload = "editFirst"
 			usr, _ = getUserData(userName)
-			replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
+			replyMarkup = printMarkedMealReplies(usr.userMeals)
 		}
 	} else if callbackData == "Submit" {
-		msg = "You are all set! Wait for the notifications"
+		msg = "You have successfully set " + strconv.Itoa(len(usr.userMeals)) + " daily meal notifications!\nI will provide you with reminders shortly before time to eat ⏰"
 		payload = "submit"
+		removeFromDailySchedule(userName)
 		syncTimezone(userName)
 		migrateDailyUser(userName)
 		updateDailySchedule()
+		createUserDailyMeals(userName)
 	} else if callbackData == "Cancel" {
 		msg = explanationMessage
 		payload = "editNext"
 		createUserDailyMeals(userName)
 		usr, _ = getUserData(userName)
-		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
+		replyMarkup = printMarkedMealReplies(usr.userMeals)
 	} else if callbackData == "Skip meal" {
-		msg = "Okay, skipping meal."
+		msg = "Okay, skipping reminder."
 		payload = "skip"
 		setDailyUserSkipLunch(userName)
 	} else if callbackData == "Stop reminder" {
@@ -55,13 +57,13 @@ func processCallback(userName string, callbackData string) (msg string, replyMar
 		}
 		updateUserDailyMeal(userName, callbackData)
 		usr, _ = getUserData(userName)
-		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
+		replyMarkup = printMarkedMealReplies(usr.userMeals)
 	} else if isTimezone(callbackData) {
 		setUserTimezone(userName, callbackData[len(callbackData)-3:])
 		msg = explanationMessage
 		payload = "editFirst"
 		usr, _ = getUserData(userName)
-		replyMarkup = printMarkedMealReplies(usr.userMealsUTC)
+		replyMarkup = printMarkedMealReplies(usr.userMeals)
 	} else if callbackData == "/start" {
 		_ = clearInsertUser(userName)
 		_ = removeFromDailySchedule(userName)
@@ -124,7 +126,7 @@ func feedThemBot() {
 	log.Printf("Successfully authorized on account %s", bot.Self.UserName)
 
 	if SEND == "SEND" {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(120 * time.Second)
 		quit := make(chan struct{})
 		for {
 			select {
@@ -134,7 +136,7 @@ func feedThemBot() {
 				users, _ := getClosestDailyUsers()
 				for _, userName := range users {
 					chatID, _ := getUserChatID(userName)
-					msg := tgbotapi.NewMessage(chatID, "Knock-knock. Who's there? Your stomach. \nFeed me! \n🍳🧀🥪🌮🥧🍦")
+					msg := tgbotapi.NewMessage(chatID, reminderMessage)
 					msg.ReplyMarkup = skipLunchReplies
 					_, _ = bot.Send(msg)
 				}

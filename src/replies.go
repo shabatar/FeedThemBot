@@ -16,6 +16,7 @@ const (
 	patienceMessage1   = "Hmmm... I'm not sure if you're using me the right way 🤔"
 	patienceMessage2   = "Whatever you are doing, could you please stop it? 🙏"
 	dunnoMessage       = "I don't know what to do. Sorry 😢"
+	reminderMessage    = "Knock-knock. Who's there? Your stomach. \nFeed me! \n🍳🧀🥪🌮🥧🍦"
 )
 
 var mealEmojis = []string{"☕", "🥐", "🍏", "🧀", "🍌", "🥨", "🍓", "🍻", "🍞", "🥕", "🥦", "🌽", "🍕", "🍩", "🍪", "🍳", "🥚", "🍆", "🍰"}

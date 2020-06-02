@@ -42,7 +42,7 @@ const (
                                  patience INT DEFAULT 2,
                                  userTimezone INT DEFAULT -100,
                                  userMealEditIndex INT DEFAULT -100,
-                                 userMealsUTC TEXT[]);`
+                                 userMeals TEXT[]);`
 	createBotDailyScheduleQuery = `CREATE TABLE IF NOT EXISTS dailySchedule(userID SERIAL PRIMARY KEY,
                                  chatID BIGINT,
                                  username TEXT,
@@ -66,7 +66,7 @@ type User struct {
 	patience          int
 	userTimezone      int
 	userMealEditIndex int
-	userMealsUTC      []string
+	userMeals         []string
 }
 
 func getUserData(username string) (*User, error) {
@@ -80,7 +80,7 @@ func getUserData(username string) (*User, error) {
 	user.userMealEditIndex, err = getUserMealEditIndex(username)
 	user.patience, err = getUserPatience(username)
 	user.userTimezone, err = getUserTimezone(username)
-	user.userMealsUTC, err = selectStringArrayValueFromUsers("SELECT UNNEST(userMealsUTC) FROM users WHERE username = '" + username + "';")
+	user.userMeals, err = getUserMealsFromUsers(username)
 	user.chatID, _ = getUserChatID(username)
 
 	if err != nil {
@@ -110,7 +110,7 @@ func insertUser(username string, chatID int64) error {
 }
 
 func migrateDailyUser(username string) error {
-	return execQuery("INSERT INTO usersDaily(userid, chatid, username, usermealsutc) SELECT userid, chatid, username, usermealsutc FROM users WHERE username = '" + username + "' ON CONFLICT(username) DO UPDATE SET userid = excluded.userid, chatid = excluded.chatid, usermealsutc = excluded.usermealsutc;")
+	return execQuery("INSERT INTO usersDaily(userid, chatid, username, usermealsutc) SELECT userid, chatid, username, usermeals FROM users WHERE username = '" + username + "' ON CONFLICT(username) DO UPDATE SET userid = excluded.userid, chatid = excluded.chatid, usermealsutc = excluded.usermealsutc;")
 }
 
 func stopDailySchedule(username string) error {
@@ -118,7 +118,12 @@ func stopDailySchedule(username string) error {
 }
 
 func updateDailySchedule() error {
-	return execQuery("insert into dailySchedule(chatid, username, mealtimeutc) select chatid, username, unnest(usermealsutc) mealtimeutc from usersDaily where stop = false on conflict(username, mealtimeutc) do update set chatid = excluded.chatid;")
+	err := execQuery("insert into dailySchedule(chatid, username, mealtimeutc) select chatid, username, unnest(usermealsutc) mealtimeutc from usersDaily where stop = false on conflict(username, mealtimeutc) do update set chatid = excluded.chatid;")
+	if err != nil {
+		return err
+	}
+	err = removeStoppedFromDailySchedule()
+	return err
 }
 
 func removeFromDailySchedule(username string) error {
@@ -130,7 +135,7 @@ func removeStoppedFromDailySchedule() error {
 }
 
 func clearInsertUser(username string) error {
-	return execQuery("INSERT INTO users(username) VALUES ('" + username + "') ON CONFLICT (username) DO UPDATE SET patience = DEFAULT, selectedFrequency = DEFAULT, userTimezone = DEFAULT, userMealEditIndex = DEFAULT, userMealsUTC = DEFAULT;")
+	return execQuery("INSERT INTO users(username) VALUES ('" + username + "') ON CONFLICT (username) DO UPDATE SET patience = DEFAULT, selectedFrequency = DEFAULT, userTimezone = DEFAULT, userMealEditIndex = DEFAULT, userMeals = DEFAULT;")
 }
 
 func addUserPatience(username string, patience int) error {
@@ -142,13 +147,17 @@ func setUserPatience(username string, patience int) error {
 }
 
 func createUserDailyMeals(username string) error {
-	return execQuery("INSERT INTO users(username, userMealsUTC) VALUES ('" + username + "', ARRAY[]::TEXT[]) ON CONFLICT (username) DO UPDATE SET userMealsUTC = ARRAY[]::TEXT[];")
+	err := execQuery("INSERT INTO users(username, userMeals) VALUES ('" + username + "', ARRAY[]::TEXT[]) ON CONFLICT (username) DO UPDATE SET userMeals = ARRAY[]::TEXT[];")
+	if err != nil {
+		return err
+	}
+	return setUserMealEditIndex(username, "-100")
 }
 
 func updateUserDailyMeal(username string, mealTime string) error {
 	a, _ := getUserMealEditIndex(username)
 	log.Printf("userMealEditIndex =  : " + strconv.Itoa(a))
-	return execQuery("UPDATE users SET userMealsUTC[" + "(SELECT userMealEditIndex FROM users WHERE username = '" + username + "')" + "-1] = '" + mealTime + "' WHERE username = '" + username + "';")
+	return execQuery("UPDATE users SET userMeals = array_append(userMeals, '" + mealTime + "') WHERE username = '" + username + "';")
 }
 
 func insertUsageStats(username string, chatID int64, messageID int, messageText string, answerID int, answerText string, payload string) error {
@@ -267,7 +276,7 @@ func getClosestDailyUsers() ([]string, error) {
 }
 
 func syncTimezone(username string) error {
-	query := `update users set usermealsutc = (select array(select mealtime::time - '01:00:00'::time * usertimezone from (select usertimezone, unnest(usermealsutc) as mealtime from users where username = '` + username + `') as t1)::text[]) where username = '` + username + `';`
+	query := `update users set usermeals = (select array(select mealtime::time - '01:00:00'::time * usertimezone from (select usertimezone, unnest(usermeals) as mealtime from users where username = '` + username + `') as t1)::text[]) where username = '` + username + `';`
 	return execQuery(query)
 }
 
@@ -277,6 +286,10 @@ func getUserTimezone(username string) (int, error) {
 
 func getUserMealEditIndex(username string) (int, error) {
 	return selectIntValueFromTable("users", "userMealEditIndex", username)
+}
+
+func getUserMealsFromUsers(username string) ([]string, error) {
+	return selectStringArrayValueFromUsers("SELECT UNNEST(userMeals) FROM users WHERE username = '" + username + "';")
 }
 
 func getMessageIDFromUsage(username string, payload string) (int, error) {
